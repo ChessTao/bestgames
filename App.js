@@ -337,7 +337,28 @@
       const currentEl = movesWrapEl.querySelector('.move-btn.current, .variation-btn.current');
       if (!currentEl) return;
       requestAnimationFrame(() => {
-        currentEl.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+        const containerRect = movesWrapEl.getBoundingClientRect();
+        const currentRect = currentEl.getBoundingClientRect();
+        const offsetTop = currentEl.offsetTop;
+        const offsetBottom = offsetTop + currentEl.offsetHeight;
+        const visibleTop = movesWrapEl.scrollTop;
+        const visibleBottom = visibleTop + movesWrapEl.clientHeight;
+        const padding = Math.max(24, Math.floor(movesWrapEl.clientHeight * 0.18));
+
+        if (offsetTop - padding < visibleTop) {
+          movesWrapEl.scrollTo({ top: Math.max(0, offsetTop - padding), behavior: 'smooth' });
+          return;
+        }
+
+        if (offsetBottom + padding > visibleBottom) {
+          const targetTop = offsetBottom - movesWrapEl.clientHeight + padding;
+          movesWrapEl.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+          return;
+        }
+
+        if (currentRect.top < containerRect.top || currentRect.bottom > containerRect.bottom) {
+          currentEl.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+        }
       });
     }
     function refresh() { updateHeader(); renderBoard(); renderMoves(); scrollCurrentMoveIntoView(); requestEngineAnalysis(); }
