@@ -74,8 +74,8 @@
       background: var(--panel2);
     }
     .games-table {
-      width: 100%;
-      min-width: 760px;
+      width: max-content;
+      min-width: 100%;
       border-collapse: collapse;
       font-size: 13px;
     }
@@ -116,12 +116,25 @@
       width: 30px;
       min-width: 30px;
       padding-left: 4px;
-      padding-right: 4px;
+      padding-right: 1px;
+      text-align: left;
+    }
+    .games-table th:nth-child(2),
+    .games-table td:nth-child(2) {
+      padding-left: 5px;
     }
     .games-table td.event-cell {
       white-space: normal;
       min-width: 240px;
       line-height: 1.35;
+    }
+    .games-table th:nth-child(4),
+    .games-table td:nth-child(4) {
+      padding-right: 3px;
+    }
+    .games-table th:nth-child(5),
+    .games-table td:nth-child(5) {
+      padding-left: 3px;
     }
     .table-sort-btn {
       appearance: none;
