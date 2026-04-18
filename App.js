@@ -19,6 +19,8 @@
     const RANKS = ['8','7','6','5','4','3','2','1'];
 
     const boardEl = document.getElementById('board');
+    const boardShellEl = document.querySelector('.board-shell');
+    const boardResizeHandleEl = document.getElementById('boardResizeHandle');
     const gamesListEl = document.getElementById('gamesList');
     const movesWrapEl = document.getElementById('movesWrap');
     const boardTitleEl = document.getElementById('boardTitle');
@@ -45,6 +47,7 @@
       games: [],
       gameIndex: 0,
       replayIndex: 0,
+      boardSize: Number(localStorage.getItem('cm_board_size')) || null,
       sortKey: 'date',
       sortDir: 'desc',
       orientation: localStorage.getItem('cm_orientation') || 'white',
@@ -63,6 +66,45 @@
       enginePv: '',
       currentEval: ''
     };
+    const BOARD_MIN_SIZE = 320;
+
+    function boardMaxSize() {
+      const panelWidth = boardShellEl.parentElement ? boardShellEl.parentElement.clientWidth - 28 : 700;
+      return Math.max(BOARD_MIN_SIZE, panelWidth);
+    }
+    function clampBoardSize(size) {
+      return Math.max(BOARD_MIN_SIZE, Math.min(boardMaxSize(), Math.round(size)));
+    }
+    function persistBoardSize() {
+      if (state.boardSize) localStorage.setItem('cm_board_size', String(state.boardSize));
+      else localStorage.removeItem('cm_board_size');
+    }
+    function applyBoardSize() {
+      if (!state.boardSize) {
+        boardShellEl.style.width = '';
+        return;
+      }
+      const nextSize = clampBoardSize(state.boardSize);
+      state.boardSize = nextSize;
+      boardShellEl.style.width = `${nextSize}px`;
+    }
+    function beginBoardResize(event) {
+      event.preventDefault();
+      const pointerMove = (moveEvent) => {
+        const nextSize = clampBoardSize(moveEvent.clientX - boardShellEl.getBoundingClientRect().left);
+        state.boardSize = nextSize;
+        applyBoardSize();
+      };
+      const pointerUp = () => {
+        boardShellEl.classList.remove('resizing');
+        persistBoardSize();
+        window.removeEventListener('pointermove', pointerMove);
+        window.removeEventListener('pointerup', pointerUp);
+      };
+      boardShellEl.classList.add('resizing');
+      window.addEventListener('pointermove', pointerMove);
+      window.addEventListener('pointerup', pointerUp);
+    }
 
     async function loadPgnText() {
       const response = await fetch(PGN_SOURCE, { cache: 'no-store' });
@@ -136,7 +178,7 @@
             headers,
             moves: verboseMoves,
             states,
-            title: `${headers.White || 'White'} — ${headers.Black || 'Black'}`,
+            title: `${headers.White || 'White'}${headers.WhiteElo ? ` (${headers.WhiteElo})` : ''} — ${headers.Black || 'Black'}${headers.BlackElo ? ` (${headers.BlackElo})` : ''}`,
             subtitle: `${headers.Event || 'Без турнира'} • ${headers.Site || 'Без места'} • ${headers.Date || 'Без даты'}`,
             compactLabel: compactGameLabel(headers),
             result: headers.Result || '*',
@@ -238,6 +280,9 @@
       if (left > right) return 1 * direction;
       return a.id - b.id;
     }
+    function sortedGames() {
+      return [...state.games].sort(compareGames);
+    }
     function sortIndicator(key) {
       if (state.sortKey !== key) return '';
       return state.sortDir === 'asc' ? ' ▲' : ' ▼';
@@ -246,6 +291,14 @@
       if (state.sortKey === key) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
       else { state.sortKey = key; state.sortDir = key === 'date' ? 'desc' : 'asc'; }
       renderGamesList();
+    }
+    function selectRelativeGame(delta) {
+      const orderedGames = sortedGames();
+      const currentIndex = orderedGames.findIndex(game => game.id === state.gameIndex);
+      if (currentIndex === -1) return;
+      const nextIndex = Math.max(0, Math.min(currentIndex + delta, orderedGames.length - 1));
+      if (nextIndex === currentIndex) return;
+      selectGame(orderedGames[nextIndex].id);
     }
     function renderGamesList() {
       gamesListEl.innerHTML = '';
@@ -282,7 +335,7 @@
       table.appendChild(thead);
 
       const tbody = document.createElement('tbody');
-      [...state.games].sort(compareGames).forEach((game, orderIndex) => {
+      sortedGames().forEach((game, orderIndex) => {
         const row = document.createElement('tr');
         row.className = game.id === state.gameIndex ? 'active' : '';
         row.addEventListener('click', () => selectGame(game.id));
@@ -507,6 +560,7 @@
       try { state.engine.postMessage('stop'); state.engine.postMessage('position fen ' + fen); state.engine.postMessage('go depth 14'); clearTimeout(engineTimer); engineTimer = setTimeout(() => { if (state.engine) { state.engine.postMessage('stop'); engineStateEl.textContent = 'Stockfish: готов'; } }, 1800); } catch (e) { console.error(e); }
     }
     document.getElementById('flipBtn').addEventListener('click', () => { state.orientation = state.orientation === 'white' ? 'black' : 'white'; persistState(); renderBoard(); });
+    boardResizeHandleEl.addEventListener('pointerdown', beginBoardResize);
     document.getElementById('startBtn').addEventListener('click', () => goToReplay(0));
     document.getElementById('prevBtn').addEventListener('click', () => { if (state.analysisMode && state.analysisCurrentNode && state.analysisCurrentNode.parent) return goToAnalysisNode(state.analysisCurrentNode.parent); goToReplay(state.replayIndex - 1); });
     document.getElementById('nextBtn').addEventListener('click', () => { if (state.analysisMode && state.analysisCurrentNode && state.analysisCurrentNode.children[0]) return goToAnalysisNode(state.analysisCurrentNode.children[0]); goToReplay(state.replayIndex + 1); });
@@ -514,6 +568,16 @@
     document.getElementById('resetAnalysisBtn').addEventListener('click', () => { const target = state.analysisBaseIndex !== null ? state.analysisBaseIndex : state.replayIndex; goToReplay(target); });
     document.getElementById('copyFenBtn').addEventListener('click', async () => { const fen = currentChess().fen(); try { await navigator.clipboard.writeText(fen); } catch (_) {} });
     window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectRelativeGame(-1);
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectRelativeGame(1);
+        return;
+      }
       if (state.analysisMode && state.analysisCurrentNode) {
         if (e.key === 'ArrowLeft' && state.analysisCurrentNode.parent) return goToAnalysisNode(state.analysisCurrentNode.parent);
         if (e.key === 'ArrowRight' && state.analysisCurrentNode.children[0]) return goToAnalysisNode(state.analysisCurrentNode.children[0]);
@@ -521,6 +585,10 @@
         if (e.key === 'End') { let node = state.analysisCurrentNode; while (node.children[0]) node = node.children[0]; return goToAnalysisNode(node); }
       }
       if (e.key === 'ArrowLeft') goToReplay(state.replayIndex - 1); if (e.key === 'ArrowRight') goToReplay(state.replayIndex + 1); if (e.key === 'Home') goToReplay(0); if (e.key === 'End') goToReplay(currentGame().moves.length);
+    });
+    window.addEventListener('resize', () => {
+      if (!state.boardSize) return;
+      applyBoardSize();
     });
     async function boot() {
       if (typeof Chess !== 'function') { boardTitleEl.textContent = 'Ошибка загрузки chess.js'; boardSubtitleEl.textContent = 'Проверь подключение к интернету: без библиотеки браузер не сможет разобрать PGN.'; return; }
@@ -534,6 +602,7 @@
         return;
       }
       state.games = buildGames(rawPgn); if (!state.games.length) { boardTitleEl.textContent = 'Партии не найдены'; boardSubtitleEl.textContent = 'PGN-файл загрузился, но не удалось его прочитать.'; return; }
+      applyBoardSize();
       restoreState(); renderGamesList(); refresh(); initEngine();
     }
     boot();
