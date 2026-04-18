@@ -45,6 +45,8 @@
       games: [],
       gameIndex: 0,
       replayIndex: 0,
+      sortKey: 'date',
+      sortDir: 'desc',
       orientation: localStorage.getItem('cm_orientation') || 'white',
       selectedSquare: null,
       legalTargets: [],
@@ -93,6 +95,15 @@
       const m = String(dateStr || '').match(/(\d{4})/);
       return m ? m[1] : '—';
     }
+    function parseSortableDate(dateStr = '') {
+      const match = String(dateStr || '').match(/^(\d{4})\.(\d{2})\.(\d{2})$/);
+      if (!match) return 0;
+      return Number(`${match[1]}${match[2]}${match[3]}`);
+    }
+    function parseSortableElo(value = '') {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : -1;
+    }
     function compactGameLabel(headers) {
       const white = headers.White || 'White';
       const black = headers.Black || 'Black';
@@ -119,7 +130,27 @@
             replay.move(mv);
             states.push({ fen: replay.fen(), san: mv.san, move: mv, moveNumber: i + 1, from: mv.from, to: mv.to });
           });
-          games.push({ id: index, pgn: chunk, headers, moves: verboseMoves, states, title: `${headers.White || 'White'} — ${headers.Black || 'Black'}`, subtitle: `${headers.Event || 'Без турнира'} • ${headers.Site || 'Без места'} • ${headers.Date || 'Без даты'}`, compactLabel: compactGameLabel(headers), result: headers.Result || '*' });
+          games.push({
+            id: index,
+            pgn: chunk,
+            headers,
+            moves: verboseMoves,
+            states,
+            title: `${headers.White || 'White'} — ${headers.Black || 'Black'}`,
+            subtitle: `${headers.Event || 'Без турнира'} • ${headers.Site || 'Без места'} • ${headers.Date || 'Без даты'}`,
+            compactLabel: compactGameLabel(headers),
+            result: headers.Result || '*',
+            white: headers.White || 'White',
+            black: headers.Black || 'Black',
+            whiteElo: headers.WhiteElo || '—',
+            blackElo: headers.BlackElo || '—',
+            event: headers.Event || '—',
+            date: headers.Date || '—',
+            year: yearFromDate(headers.Date || ''),
+            sortDate: parseSortableDate(headers.Date || ''),
+            sortWhiteElo: parseSortableElo(headers.WhiteElo || ''),
+            sortBlackElo: parseSortableElo(headers.BlackElo || '')
+          });
         } catch (e) { console.error('PGN parse error', e); }
       });
       return games;
@@ -176,15 +207,108 @@
       });
       updateStatus(chess);
     }
+    function compareGames(a, b) {
+      const direction = state.sortDir === 'asc' ? 1 : -1;
+      let left = '';
+      let right = '';
+      switch (state.sortKey) {
+        case 'white':
+          left = a.white.toLocaleLowerCase('en');
+          right = b.white.toLocaleLowerCase('en');
+          break;
+        case 'black':
+          left = a.black.toLocaleLowerCase('en');
+          right = b.black.toLocaleLowerCase('en');
+          break;
+        case 'whiteElo':
+          left = a.sortWhiteElo;
+          right = b.sortWhiteElo;
+          break;
+        case 'blackElo':
+          left = a.sortBlackElo;
+          right = b.sortBlackElo;
+          break;
+        case 'date':
+        default:
+          left = a.sortDate;
+          right = b.sortDate;
+          break;
+      }
+      if (left < right) return -1 * direction;
+      if (left > right) return 1 * direction;
+      return a.id - b.id;
+    }
+    function sortIndicator(key) {
+      if (state.sortKey !== key) return '';
+      return state.sortDir === 'asc' ? ' ▲' : ' ▼';
+    }
+    function setGamesSort(key) {
+      if (state.sortKey === key) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortKey = key; state.sortDir = key === 'date' ? 'desc' : 'asc'; }
+      renderGamesList();
+    }
     function renderGamesList() {
       gamesListEl.innerHTML = '';
-      state.games.forEach((game, index) => {
-        const card = document.createElement('div');
-        card.className = 'game-card' + (index === state.gameIndex ? ' active' : '');
-        card.innerHTML = `<div class="pairing">${escapeHtml(game.compactLabel || game.title)}</div>`;
-        card.addEventListener('click', () => selectGame(index));
-        gamesListEl.appendChild(card);
+
+      const table = document.createElement('table');
+      table.className = 'games-table';
+
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      const columns = [
+        { label: '№' },
+        { label: 'Белые', key: 'white' },
+        { label: 'Чёрные', key: 'black' },
+        { label: 'Дата', key: 'date' },
+        { label: 'Турнир' },
+        { label: 'Рез.' }
+      ];
+
+      columns.forEach((column) => {
+        const th = document.createElement('th');
+        if (column.key) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'table-sort-btn' + (state.sortKey === column.key ? ' active' : '');
+          btn.textContent = column.label + sortIndicator(column.key);
+          btn.addEventListener('click', () => setGamesSort(column.key));
+          th.appendChild(btn);
+        } else {
+          th.textContent = column.label;
+        }
+        headerRow.appendChild(th);
       });
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      [...state.games].sort(compareGames).forEach((game, orderIndex) => {
+        const row = document.createElement('tr');
+        row.className = game.id === state.gameIndex ? 'active' : '';
+        row.addEventListener('click', () => selectGame(game.id));
+
+        const cells = [
+          String(orderIndex + 1),
+          game.white,
+          game.black,
+          game.year,
+          game.event,
+          game.result
+        ];
+
+        cells.forEach((value, cellIndex) => {
+          const cell = document.createElement('td');
+          cell.textContent = value;
+          if (cellIndex === 0 || cellIndex === 5) cell.classList.add('numeric');
+          if (cellIndex === 4) cell.classList.add('event-cell');
+          if (cellIndex === 0) cell.classList.add('index-cell');
+          row.appendChild(cell);
+        });
+
+        tbody.appendChild(row);
+      });
+      table.appendChild(tbody);
+      gamesListEl.appendChild(table);
     }
     function createAnalysisNode(parent, move, fen) { return { id: state.analysisNodeSeq++, parent, move, fen, children: [] }; }
     function clearAnalysis() { state.analysisMode = false; state.analysisBaseIndex = null; state.analysisRoot = null; state.analysisCurrentNode = null; }

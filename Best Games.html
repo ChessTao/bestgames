@@ -11,7 +11,7 @@
   <div class="app">
     <div class="topbar">
       <div>
-        <h1>Гроссмейстер Валерий Авескулов — партии</h1>
+        <h1>Мои партии</h1>
       </div>
     </div>
 
@@ -41,20 +41,21 @@
 
       <section class="panel moves-col">
         <h2>Ходы и анализ</h2>
+        <div id="movesWrap" class="moves-wrap"></div>
+        <div class="moves-controls">
+          <div class="moves-nav-group">
+            <button id="startBtn" title="В начало" aria-label="В начало">⏮</button>
+            <button id="prevBtn" title="Назад" aria-label="Назад">◀</button>
+            <button id="nextBtn" title="Вперёд" aria-label="Вперёд">▶</button>
+            <button id="endBtn" title="В конец" aria-label="В конец">⏭</button>
+          </div>
+          <button id="resetAnalysisBtn" class="analysis-return-btn" title="Вернуться к партии" aria-label="Вернуться к партии">↺</button>
+        </div>
         <div class="analysis-box">
           <div id="engineState" class="analysis-line">Stockfish: подготовка...</div>
           <div id="evalLine" class="analysis-line">Оценка: —</div>
           <div id="bestMoveLine" class="analysis-line">Лучший ход: —</div>
           <div id="pvLine" class="pv-line">—</div>
-        </div>
-        <div id="movesWrap" class="moves-wrap"></div>
-        <div class="moves-controls">
-          <button id="startBtn" title="В начало" aria-label="В начало">⏮</button>
-          <button id="prevBtn" title="Назад" aria-label="Назад">◀</button>
-          <button id="nextBtn" title="Вперёд" aria-label="Вперёд">▶</button>
-          <button id="endBtn" title="В конец" aria-label="В конец">⏭</button>
-          <span class="spacer"></span>
-          <button id="resetAnalysisBtn" class="analysis-return-btn" title="Вернуться к партии" aria-label="Вернуться к партии">↺</button>
         </div>
       </section>
     </div>
