@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Гроссмейстер Валерий Авескулов — PGN Viewer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <link rel="stylesheet" href="Styles.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div>
+        <h1>Гроссмейстер Валерий Авескулов — партии</h1>
+      </div>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2>Партии</h2>
+        <div id="gamesList" class="games-list"></div>
+      </section>
+
+      <section class="panel board-col">
+        <div class="board-head">
+          <div id="boardTitle" class="board-title">Загрузка…</div>
+          <div id="boardSubtitle" class="board-subtitle"></div>
+        </div>
+
+        <div class="board-shell">
+          <div id="board" class="board"></div>
+          <span id="whiteTurnDot" class="turn-dot white"></span>
+          <span id="blackTurnDot" class="turn-dot black"></span>
+        </div>
+
+        <div class="board-footer-actions">
+          <button id="flipBtn">Перевернуть доску</button>
+          <button id="copyFenBtn">Копировать FEN</button>
+        </div>
+
+      </section>
+
+      <section class="panel moves-col">
+        <h2>Ходы и анализ</h2>
+        <div class="analysis-box">
+          <div id="engineState" class="analysis-line">Stockfish: подготовка…</div>
+          <div id="evalLine" class="analysis-line">Оценка: —</div>
+          <div id="bestMoveLine" class="analysis-line">Лучший ход: —</div>
+          <div id="pvLine" class="pv-line">—</div>
+        </div>
+        <div id="movesWrap" class="moves-wrap"></div>
+        <div class="moves-controls">
+          <button id="startBtn" title="В начало" aria-label="В начало">⏮</button>
+          <button id="prevBtn" title="Назад" aria-label="Назад">◀</button>
+          <button id="nextBtn" title="Вперёд" aria-label="Вперёд">▶</button>
+          <button id="endBtn" title="В конец" aria-label="В конец">⏭</button>
+          <span class="spacer"></span>
+          <button id="resetAnalysisBtn" class="analysis-return-btn" title="Вернуться к партии" aria-label="Вернуться к партии">↺</button>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script src="App.js"></script>
+</body>
+</html>
