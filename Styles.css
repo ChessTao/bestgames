@@ -102,6 +102,7 @@
       width: min(100%, 700px, calc(100vh - 340px));
       max-width: 100%;
       margin: 0 auto;
+      padding-right: 28px;
     }
     .board-head { display: grid; gap: 6px; }
     .board-title { font-size: 18px; font-weight: 700; }
@@ -282,7 +283,7 @@
 
     .turn-dot {
       position: absolute;
-      right: 10px;
+      right: 4px;
       width: 16px;
       height: 16px;
       border-radius: 999px;
@@ -311,6 +312,11 @@
       flex-wrap: wrap;
       gap: 10px;
       align-items: center;
+    }
+    .moves-controls button {
+      min-width: 46px;
+      justify-content: center;
+      padding: 11px 12px;
     }
     .moves-controls .spacer { flex: 1 1 auto; }
     .analysis-return-btn {
