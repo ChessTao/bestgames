@@ -1,4 +1,4 @@
-﻿    const PGN_SOURCE = 'best games.pgn';
+﻿    const PGN_SOURCE = 'storage/games/best games.pgn';
 
     const PIECES = {
       p: 'https://lichess1.org/assets/piece/cburnett/bP.svg',
@@ -619,6 +619,9 @@
         e.preventDefault();
         selectRelativeGame(1);
         return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
       }
       if (state.analysisMode && state.analysisCurrentNode) {
         if (e.key === 'ArrowLeft' && state.analysisCurrentNode.parent) return goToAnalysisNode(state.analysisCurrentNode.parent);
