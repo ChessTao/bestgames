@@ -36,6 +36,16 @@
     const bestMoveLineEl = document.getElementById('bestMoveLine');
     const pvLineEl = document.getElementById('pvLine');
     const THEMES = ['classic', 'light', 'blue', 'green', 'orange', 'teal'];
+    const stockfish = typeof window.createStockfishController === 'function'
+      ? window.createStockfishController({
+          onStateChange: ({ engineState, evalText, bestMoveText, pvText }) => {
+            if (engineState !== undefined) engineStateEl.textContent = engineState;
+            if (evalText !== undefined) evalLineEl.textContent = evalText;
+            if (bestMoveText !== undefined) bestMoveLineEl.textContent = bestMoveText;
+            if (pvText !== undefined) pvLineEl.textContent = pvText;
+          }
+        })
+      : null;
     movesWrapEl.addEventListener('click', (event) => {
       const variationBtn = event.target.closest('.variation-btn[data-node-id]');
       if (!variationBtn) return;
@@ -63,13 +73,7 @@
       analysisRoot: null,
       analysisCurrentNode: null,
       analysisNodeSeq: 1,
-      lastMove: null,
-      engine: null,
-      engineReady: false,
-      engineFen: null,
-      engineBestMove: '',
-      enginePv: '',
-      currentEval: ''
+      lastMove: null
     };
     const BOARD_MIN_SIZE = 320;
 
@@ -576,26 +580,12 @@
         }
       });
     }
-    function refresh() { updateHeader(); renderBoard(); renderMoves(); scrollCurrentMoveIntoView(); requestEngineAnalysis(); }
-    function scoreText(type, value) { if (type === 'mate') return `Мат в ${value}`; if (type === 'cp') return `${(value / 100).toFixed(2)}`; return '—'; }
-    function initEngine() {
-      try {
-        const blobCode = `importScripts("https://cdn.jsdelivr.net/npm/stockfish@18.0.7/src/stockfish-18-asm.js");`; const blob = new Blob([blobCode], { type: 'application/javascript' }); const url = URL.createObjectURL(blob); const worker = new Worker(url); URL.revokeObjectURL(url); state.engine = worker; worker.onmessage = onEngineMessage; worker.postMessage('uci'); worker.postMessage('isready'); worker.postMessage('ucinewgame');
-      } catch (e) { console.error(e); engineStateEl.textContent = 'Stockfish: не удалось запустить локально'; evalLineEl.textContent = 'Оценка: открой позицию в Lichess'; bestMoveLineEl.textContent = 'Лучший ход: —'; pvLineEl.textContent = 'Встроенный движок не стартовал.'; }
-    }
-    function onEngineMessage(event) {
-      const line = String(event.data || '').trim(); if (!line) return;
-      if (line === 'readyok') { state.engineReady = true; engineStateEl.textContent = 'Stockfish: готов'; requestEngineAnalysis(); return; }
-      if (line.startsWith('info ')) {
-        const depthMatch = line.match(/\bdepth\s+(\d+)/), cpMatch = line.match(/\bscore\s+cp\s+(-?\d+)/), mateMatch = line.match(/\bscore\s+mate\s+(-?\d+)/), pvMatch = line.match(/\bpv\s+(.+)$/); const depth = depthMatch ? depthMatch[1] : null;
-        if (mateMatch) state.currentEval = scoreText('mate', mateMatch[1]); else if (cpMatch) state.currentEval = scoreText('cp', Number(cpMatch[1])); if (pvMatch) state.enginePv = pvMatch[1]; evalLineEl.textContent = `Оценка${depth ? ` (глубина ${depth})` : ''}: ${state.currentEval || '—'}`; pvLineEl.textContent = state.enginePv || '—'; return;
-      }
-      if (line.startsWith('bestmove')) { const bm = line.split(/\s+/)[1] || '(нет)'; state.engineBestMove = bm; bestMoveLineEl.textContent = `Лучший ход: ${bm}`; }
-    }
-    let engineTimer = null;
-    function requestEngineAnalysis() {
-      if (!state.engine || !state.engineReady) return; const fen = currentChess().fen(); if (state.engineFen === fen) return; state.engineFen = fen; state.currentEval = ''; state.enginePv = ''; state.engineBestMove = ''; evalLineEl.textContent = 'Оценка: считаю…'; bestMoveLineEl.textContent = 'Лучший ход: считаю…'; pvLineEl.textContent = '—'; engineStateEl.textContent = 'Stockfish: анализирует';
-      try { state.engine.postMessage('stop'); state.engine.postMessage('position fen ' + fen); state.engine.postMessage('go depth 14'); clearTimeout(engineTimer); engineTimer = setTimeout(() => { if (state.engine) { state.engine.postMessage('stop'); engineStateEl.textContent = 'Stockfish: готов'; } }, 1800); } catch (e) { console.error(e); }
+    function refresh() {
+      updateHeader();
+      renderBoard();
+      renderMoves();
+      scrollCurrentMoveIntoView();
+      if (stockfish) stockfish.requestAnalysis(currentChess().fen());
     }
     document.getElementById('flipBtn').addEventListener('click', () => { state.orientation = state.orientation === 'white' ? 'black' : 'white'; persistState(); renderBoard(); });
     boardResizeHandleEl.addEventListener('pointerdown', beginBoardResize);
@@ -661,6 +651,9 @@
       }
       state.games = buildGames(rawPgn); if (!state.games.length) { boardTitleEl.textContent = 'Партии не найдены'; boardSubtitleEl.textContent = 'PGN-файл загрузился, но не удалось его прочитать.'; return; }
       applyBoardSize();
-      restoreState(); renderGamesList(); refresh(); initEngine();
+      restoreState();
+      renderGamesList();
+      refresh();
+      if (stockfish) stockfish.init();
     }
     boot();
