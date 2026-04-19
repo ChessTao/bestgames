@@ -27,11 +27,15 @@
     const boardSubtitleEl = document.getElementById('boardSubtitle');
     const whiteTurnDotEl = document.getElementById('whiteTurnDot');
     const blackTurnDotEl = document.getElementById('blackTurnDot');
+    const themeToggleBtnEl = document.getElementById('themeToggleBtn');
+    const themeMenuEl = document.getElementById('themeMenu');
+    const themeOptionEls = Array.from(document.querySelectorAll('.theme-option'));
     const resetAnalysisBtnEl = document.getElementById('resetAnalysisBtn');
     const engineStateEl = document.getElementById('engineState');
     const evalLineEl = document.getElementById('evalLine');
     const bestMoveLineEl = document.getElementById('bestMoveLine');
     const pvLineEl = document.getElementById('pvLine');
+    const THEMES = ['classic', 'light', 'blue', 'green', 'orange', 'teal'];
     movesWrapEl.addEventListener('click', (event) => {
       const variationBtn = event.target.closest('.variation-btn[data-node-id]');
       if (!variationBtn) return;
@@ -48,6 +52,7 @@
       gameIndex: 0,
       replayIndex: 0,
       boardSize: Number(localStorage.getItem('cm_board_size')) || null,
+      theme: THEMES.includes(localStorage.getItem('cm_theme')) ? localStorage.getItem('cm_theme') : 'classic',
       sortKey: 'date',
       sortDir: 'desc',
       orientation: localStorage.getItem('cm_orientation') || 'white',
@@ -78,6 +83,39 @@
     function persistBoardSize() {
       if (state.boardSize) localStorage.setItem('cm_board_size', String(state.boardSize));
       else localStorage.removeItem('cm_board_size');
+    }
+    function persistTheme() {
+      localStorage.setItem('cm_theme', state.theme);
+    }
+    function updateThemeMenu() {
+      if (!themeToggleBtnEl || !themeMenuEl) return;
+      themeToggleBtnEl.textContent = 'Тема';
+      themeOptionEls.forEach((optionEl) => {
+        const isActive = optionEl.dataset.theme === state.theme;
+        optionEl.classList.toggle('active', isActive);
+        optionEl.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+      });
+    }
+    function applyTheme() {
+      document.body.dataset.theme = state.theme;
+      updateThemeMenu();
+    }
+    function setTheme(theme) {
+      if (!THEMES.includes(theme) || theme === state.theme) return;
+      state.theme = theme;
+      persistTheme();
+      applyTheme();
+    }
+    function closeThemeMenu() {
+      if (!themeMenuEl || !themeToggleBtnEl) return;
+      themeMenuEl.hidden = true;
+      themeToggleBtnEl.setAttribute('aria-expanded', 'false');
+    }
+    function toggleThemeMenu() {
+      if (!themeMenuEl || !themeToggleBtnEl) return;
+      const shouldOpen = themeMenuEl.hidden;
+      themeMenuEl.hidden = !shouldOpen;
+      themeToggleBtnEl.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
     }
     function applyBoardSize() {
       if (!state.boardSize) {
@@ -561,6 +599,16 @@
     }
     document.getElementById('flipBtn').addEventListener('click', () => { state.orientation = state.orientation === 'white' ? 'black' : 'white'; persistState(); renderBoard(); });
     boardResizeHandleEl.addEventListener('pointerdown', beginBoardResize);
+    themeToggleBtnEl.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleThemeMenu();
+    });
+    themeOptionEls.forEach((optionEl) => {
+      optionEl.addEventListener('click', () => {
+        setTheme(optionEl.dataset.theme);
+        closeThemeMenu();
+      });
+    });
     document.getElementById('startBtn').addEventListener('click', () => goToReplay(0));
     document.getElementById('prevBtn').addEventListener('click', () => { if (state.analysisMode && state.analysisCurrentNode && state.analysisCurrentNode.parent) return goToAnalysisNode(state.analysisCurrentNode.parent); goToReplay(state.replayIndex - 1); });
     document.getElementById('nextBtn').addEventListener('click', () => { if (state.analysisMode && state.analysisCurrentNode && state.analysisCurrentNode.children[0]) return goToAnalysisNode(state.analysisCurrentNode.children[0]); goToReplay(state.replayIndex + 1); });
@@ -568,6 +616,10 @@
     document.getElementById('resetAnalysisBtn').addEventListener('click', () => { const target = state.analysisBaseIndex !== null ? state.analysisBaseIndex : state.replayIndex; goToReplay(target); });
     document.getElementById('copyFenBtn').addEventListener('click', async () => { const fen = currentChess().fen(); try { await navigator.clipboard.writeText(fen); } catch (_) {} });
     window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && themeMenuEl && !themeMenuEl.hidden) {
+        closeThemeMenu();
+        return;
+      }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         selectRelativeGame(-1);
@@ -590,7 +642,13 @@
       if (!state.boardSize) return;
       applyBoardSize();
     });
+    document.addEventListener('click', (event) => {
+      if (!themeMenuEl || themeMenuEl.hidden) return;
+      if (event.target.closest('.theme-switcher')) return;
+      closeThemeMenu();
+    });
     async function boot() {
+      applyTheme();
       if (typeof Chess !== 'function') { boardTitleEl.textContent = 'Ошибка загрузки chess.js'; boardSubtitleEl.textContent = 'Проверь подключение к интернету: без библиотеки браузер не сможет разобрать PGN.'; return; }
       let rawPgn = '';
       try {

@@ -13,6 +13,17 @@
       <div>
         <h1>Мои партии</h1>
       </div>
+      <div class="theme-switcher">
+        <button id="themeToggleBtn" class="theme-toggle-btn" type="button" aria-haspopup="true" aria-expanded="false">Тема</button>
+        <div id="themeMenu" class="theme-menu" hidden>
+          <button type="button" class="theme-option" data-theme="classic">Тёмная</button>
+          <button type="button" class="theme-option" data-theme="light">Светлая</button>
+          <button type="button" class="theme-option" data-theme="blue">Голубая</button>
+          <button type="button" class="theme-option" data-theme="green">Зелёная</button>
+          <button type="button" class="theme-option" data-theme="orange">Оранжевая</button>
+          <button type="button" class="theme-option" data-theme="teal">Бирюзовая</button>
+        </div>
+      </div>
     </div>
 
     <div class="layout">
@@ -41,7 +52,6 @@
       </section>
 
       <section class="panel moves-col">
-        <h2>Ходы и анализ</h2>
         <div id="movesWrap" class="moves-wrap"></div>
         <div class="moves-controls">
           <div class="moves-nav-group">
