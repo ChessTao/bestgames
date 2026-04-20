@@ -12,6 +12,27 @@ const STORAGE_FOLDERS = {
   games: path.join(STORAGE_DIR, 'games'),
   engine: path.join(STORAGE_DIR, 'engine')
 };
+const UPLOAD_RULES = {
+  games: {
+    extensions: new Set(['.pgn']),
+    contentTypes: new Set([
+      'application/x-chess-pgn',
+      'application/octet-stream',
+      'text/plain'
+    ]),
+    maxBytes: 10 * 1024 * 1024
+  },
+  engine: {
+    extensions: new Set(['.js', '.wasm']),
+    contentTypes: new Set([
+      'application/javascript',
+      'text/javascript',
+      'application/wasm',
+      'application/octet-stream'
+    ]),
+    maxBytes: 32 * 1024 * 1024
+  }
+};
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -47,6 +68,75 @@ function sendText(res, statusCode, text) {
 function sanitizeFileName(fileName) {
   const cleaned = String(fileName || '').trim().replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
   return cleaned || null;
+}
+
+function stripContentTypeParameters(contentType) {
+  return String(contentType || '')
+    .split(';', 1)[0]
+    .trim()
+    .toLowerCase();
+}
+
+function validateUploadRequest(type, fileName, contentType) {
+  const rules = UPLOAD_RULES[type];
+  if (!rules) {
+    return { ok: false, statusCode: 400, error: 'Unknown upload type. Use games or engine.' };
+  }
+
+  if (!fileName || fileName === '.' || fileName === '..') {
+    return { ok: false, statusCode: 400, error: 'filename query parameter is required.' };
+  }
+
+  if (fileName.includes('..')) {
+    return { ok: false, statusCode: 400, error: 'filename must not contain path traversal segments.' };
+  }
+
+  if (fileName.length > 120) {
+    return { ok: false, statusCode: 400, error: 'filename is too long.' };
+  }
+
+  const extension = path.extname(fileName).toLowerCase();
+  if (!rules.extensions.has(extension)) {
+    return {
+      ok: false,
+      statusCode: 415,
+      error: `Unsupported file extension for ${type}. Allowed: ${Array.from(rules.extensions).join(', ')}`
+    };
+  }
+
+  const normalizedContentType = stripContentTypeParameters(contentType);
+  if (normalizedContentType && !rules.contentTypes.has(normalizedContentType)) {
+    return {
+      ok: false,
+      statusCode: 415,
+      error: `Unsupported Content-Type for ${type}: ${normalizedContentType}`
+    };
+  }
+
+  return { ok: true, rules };
+}
+
+function resolveUploadPath(type, fileName) {
+  const targetDir = STORAGE_FOLDERS[type];
+  const targetPath = path.resolve(targetDir, fileName);
+
+  if (path.dirname(targetPath) !== targetDir) {
+    return null;
+  }
+
+  if (!targetPath.startsWith(`${targetDir}${path.sep}`) && targetPath !== targetDir) {
+    return null;
+  }
+
+  return targetPath;
+}
+
+function isValidWasmBinary(body) {
+  return body.length >= 4
+    && body[0] === 0x00
+    && body[1] === 0x61
+    && body[2] === 0x73
+    && body[3] === 0x6d;
 }
 
 function resolveStaticPath(requestPath) {
@@ -92,7 +182,9 @@ function readRequestBody(req, limitBytes = 200 * 1024 * 1024) {
     req.on('data', (chunk) => {
       total += chunk.length;
       if (total > limitBytes) {
-        reject(new Error('Request body is too large'));
+        const error = new Error('Request body is too large');
+        error.statusCode = 413;
+        reject(error);
         req.destroy();
         return;
       }
@@ -119,26 +211,36 @@ function listStorageFiles() {
 async function handleUpload(req, res, url) {
   const type = url.searchParams.get('type');
   const rawFileName = url.searchParams.get('filename');
-
-  if (!Object.prototype.hasOwnProperty.call(STORAGE_FOLDERS, type)) {
-    sendJson(res, 400, { error: 'Unknown upload type. Use games or engine.' });
+  const fileName = sanitizeFileName(rawFileName);
+  const validation = validateUploadRequest(type, fileName, req.headers['content-type']);
+  if (!validation.ok) {
+    sendJson(res, validation.statusCode, { error: validation.error });
     return;
   }
 
-  const fileName = sanitizeFileName(rawFileName);
-  if (!fileName) {
-    sendJson(res, 400, { error: 'filename query parameter is required.' });
+  const targetPath = resolveUploadPath(type, fileName);
+  if (!targetPath) {
+    sendJson(res, 400, { error: 'Invalid upload target path.' });
     return;
   }
 
   try {
-    const body = await readRequestBody(req);
+    const body = await readRequestBody(req, validation.rules.maxBytes);
     if (!body.length) {
       sendJson(res, 400, { error: 'Empty request body.' });
       return;
     }
 
-    const targetPath = path.join(STORAGE_FOLDERS[type], fileName);
+    if (path.extname(fileName).toLowerCase() === '.wasm' && !isValidWasmBinary(body)) {
+      sendJson(res, 400, { error: 'WASM upload must start with a valid wasm header.' });
+      return;
+    }
+
+    if (fs.existsSync(targetPath)) {
+      sendJson(res, 409, { error: 'A file with this name already exists.' });
+      return;
+    }
+
     fs.writeFileSync(targetPath, body);
 
     sendJson(res, 201, {
@@ -149,7 +251,7 @@ async function handleUpload(req, res, url) {
       savedTo: path.relative(ROOT_DIR, targetPath)
     });
   } catch (error) {
-    sendJson(res, 500, { error: error.message || 'Upload failed.' });
+    sendJson(res, error.statusCode || 500, { error: error.message || 'Upload failed.' });
   }
 }
 

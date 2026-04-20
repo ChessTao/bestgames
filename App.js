@@ -46,7 +46,7 @@ const analysisLinesRangeEl = document.getElementById('analysisLinesRange');
 const analysisLinesValueEl = document.getElementById('analysisLinesValue');
 const evalLineEl = document.getElementById('evalLine');
 const pvLineEl = document.getElementById('pvLine');
-const THEMES = ['classic', 'light', 'blue'];
+const THEMES = ['classic', 'blue'];
 const ANALYSIS_MODES = ['depth20', 'infinite'];
 const ANALYSIS_LINE_COUNTS = [1, 2, 3, 4, 5];
 
@@ -77,6 +77,7 @@ const state = {
   analysisCurrentNode: null,
   analysisNodeSeq: 1,
   lastMove: null,
+  engineEnabled: false,
   analysisModeSetting: ANALYSIS_MODES.includes(localStorage.getItem('cm_analysis_mode')) ? localStorage.getItem('cm_analysis_mode') : 'depth20',
   analysisLineCount: ANALYSIS_LINE_COUNTS.includes(Number(localStorage.getItem('cm_analysis_lines'))) ? Number(localStorage.getItem('cm_analysis_lines')) : 1
 };
@@ -122,6 +123,39 @@ function setAnalysisLineCount(count) {
   if (!ANALYSIS_LINE_COUNTS.includes(count) || state.analysisLineCount === count) return;
   state.analysisLineCount = count;
   applyAnalysisLineCount();
+}
+
+function setEngineIdleState() {
+  if (engineStateEl) {
+    engineStateEl.textContent = 'Stockfish 17.1 Lite (manual)';
+  }
+  if (evalLineEl) {
+    evalLineEl.textContent = 'Depth: —';
+  }
+  if (pvLineEl) {
+    pvLineEl.textContent = 'Press Play to start analysis.';
+  }
+}
+
+function requestCurrentAnalysisIfEnabled() {
+  if (!state.engineEnabled) return;
+  if (stockfish && typeof stockfish.requestAnalysis === 'function') {
+    stockfish.requestAnalysis(positionCache.currentFen());
+  }
+}
+
+function startEngineAnalysis() {
+  if (!stockfish) return;
+  state.engineEnabled = true;
+  requestCurrentAnalysisIfEnabled();
+}
+
+function stopEngineAnalysis() {
+  state.engineEnabled = false;
+  if (stockfish && typeof stockfish.stopAnalysis === 'function') {
+    stockfish.stopAnalysis();
+  }
+  setEngineIdleState();
 }
 
 const positionCache = createPositionCache({
@@ -429,14 +463,13 @@ function restoreState() {
 }
 
 function refresh({ renderMoves: shouldRenderMoves = true } = {}) {
-  const chess = positionCache.currentChess();
   renderer.updateHeader();
   renderer.renderBoard();
   if (shouldRenderMoves) renderer.renderMoves();
   else renderer.updateCurrentMoveState();
   renderer.scrollCurrentMoveIntoView();
   updateGameNavButtons();
-  if (stockfish) stockfish.requestAnalysis(chess.fen());
+  requestCurrentAnalysisIfEnabled();
 }
 
 document.getElementById('flipBtn').addEventListener('click', () => {
@@ -537,17 +570,13 @@ analysisInfiniteBtnEl.addEventListener('click', () => {
   setAnalysisMode('infinite');
 });
 analysisPlayBtnEl.addEventListener('click', () => {
-  if (stockfish && typeof stockfish.requestAnalysis === 'function') {
-    stockfish.requestAnalysis(positionCache.currentFen());
-  }
+  startEngineAnalysis();
 });
 analysisLinesRangeEl.addEventListener('input', () => {
   setAnalysisLineCount(Number(analysisLinesRangeEl.value));
 });
 analysisPauseBtnEl.addEventListener('click', () => {
-  if (stockfish && typeof stockfish.stopAnalysis === 'function') {
-    stockfish.stopAnalysis();
-  }
+  stopEngineAnalysis();
 });
 
 window.addEventListener('keydown', (event) => {
@@ -603,9 +632,11 @@ document.addEventListener('click', (event) => {
 
 async function boot() {
   applyTheme();
-  engineStateEl.textContent = stockfish && typeof stockfish.getModelLabel === 'function'
-    ? stockfish.getModelLabel()
-    : 'Stockfish 17.1 Lite';
+  if (stockfish && typeof stockfish.getModelLabel === 'function') {
+    setEngineIdleState();
+  } else {
+    engineStateEl.textContent = 'Stockfish 17.1 Lite';
+  }
   applyAnalysisMode();
   applyAnalysisLineCount();
 

@@ -111,6 +111,7 @@
       }
 
       if (line.startsWith('info ')) {
+        if (!state.fen) return;
         const depthMatch = line.match(/\bdepth\s+(\d+)/);
         const cpMatch = line.match(/\bscore\s+cp\s+(-?\d+)/);
         const mateMatch = line.match(/\bscore\s+mate\s+(-?\d+)/);

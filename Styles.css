@@ -26,34 +26,6 @@
       --variation-text: #8fc1ff;
       --variation-text-hover: #bddbff;
     }
-    body[data-theme="light"] {
-      --bg: #f3efe7;
-      --bg2: #eee7dc;
-      --panel: #f8f3ec;
-      --panel2: #f1ebe3;
-      --border: #d7cabc;
-      --text: #2d3642;
-      --muted: #766f68;
-      --accent: #6d8fbe;
-      --light: #ead8bb;
-      --dark: #bc956f;
-      --move: rgba(218, 175, 71, 0.22);
-      --select: rgba(109, 143, 190, 0.18);
-      --legal: rgba(96, 166, 120, 0.20);
-      --body-gradient: radial-gradient(circle at top, #eee8de 0%, #f3efe7 48%, #e8dfd3 100%);
-      --surface: rgba(236, 228, 217, 0.94);
-      --shadow: 0 18px 40px rgba(112, 98, 82, 0.12);
-      --button-start: #ece5da;
-      --button-end: #ece4d9;
-      --header-bg: #ede6dc;
-      --row-hover: rgba(109, 143, 190, 0.06);
-      --row-active-start: rgba(226, 217, 205, 0.92);
-      --row-active-end: rgba(217, 207, 194, 0.92);
-      --variation-border: rgba(109,143,190,.28);
-      --variation-bg: rgba(224, 216, 205, 0.68);
-      --variation-text: #5b79a3;
-      --variation-text-hover: #466588;
-    }
     body[data-theme="blue"] {
       --bg: #061726;
       --bg2: #0c2236;
@@ -86,7 +58,7 @@
     html, body { margin: 0; padding: 0; }
     body {
       min-height: 100vh;
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       background: var(--body-gradient);
       color: var(--text);
     }
