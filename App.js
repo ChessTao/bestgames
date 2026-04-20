@@ -38,17 +38,23 @@ const resetAnalysisBtnEl = document.getElementById('resetAnalysisBtn');
 const prevGameBtnEl = document.getElementById('prevGameBtn');
 const nextGameBtnEl = document.getElementById('nextGameBtn');
 const engineStateEl = document.getElementById('engineState');
+const analysisPlayBtnEl = document.getElementById('analysisPlayBtn');
+const analysisPauseBtnEl = document.getElementById('analysisPauseBtn');
+const analysisDepthBtnEl = document.getElementById('analysisDepthBtn');
+const analysisInfiniteBtnEl = document.getElementById('analysisInfiniteBtn');
+const analysisLinesRangeEl = document.getElementById('analysisLinesRange');
+const analysisLinesValueEl = document.getElementById('analysisLinesValue');
 const evalLineEl = document.getElementById('evalLine');
-const bestMoveLineEl = document.getElementById('bestMoveLine');
 const pvLineEl = document.getElementById('pvLine');
 const THEMES = ['classic', 'light', 'blue'];
+const ANALYSIS_MODES = ['depth20', 'infinite'];
+const ANALYSIS_LINE_COUNTS = [1, 2, 3, 4, 5];
 
 const stockfish = typeof window.createStockfishController === 'function'
   ? window.createStockfishController({
-      onStateChange: ({ engineState, evalText, bestMoveText, pvText }) => {
+      onStateChange: ({ engineState, evalText, pvText }) => {
         if (engineState !== undefined) engineStateEl.textContent = engineState;
         if (evalText !== undefined) evalLineEl.textContent = evalText;
-        if (bestMoveText !== undefined) bestMoveLineEl.textContent = bestMoveText;
         if (pvText !== undefined) pvLineEl.textContent = pvText;
       }
     })
@@ -70,7 +76,9 @@ const state = {
   analysisRoot: null,
   analysisCurrentNode: null,
   analysisNodeSeq: 1,
-  lastMove: null
+  lastMove: null,
+  analysisModeSetting: ANALYSIS_MODES.includes(localStorage.getItem('cm_analysis_mode')) ? localStorage.getItem('cm_analysis_mode') : 'depth20',
+  analysisLineCount: ANALYSIS_LINE_COUNTS.includes(Number(localStorage.getItem('cm_analysis_lines'))) ? Number(localStorage.getItem('cm_analysis_lines')) : 1
 };
 
 const BOARD_MIN_SIZE = 320;
@@ -82,6 +90,38 @@ function currentGame() {
 
 function setKeyboardScope(scope) {
   keyboardScope = scope;
+}
+
+function applyAnalysisMode() {
+  analysisDepthBtnEl.classList.toggle('active', state.analysisModeSetting === 'depth20');
+  analysisInfiniteBtnEl.classList.toggle('active', state.analysisModeSetting === 'infinite');
+  analysisDepthBtnEl.setAttribute('aria-pressed', state.analysisModeSetting === 'depth20' ? 'true' : 'false');
+  analysisInfiniteBtnEl.setAttribute('aria-pressed', state.analysisModeSetting === 'infinite' ? 'true' : 'false');
+  localStorage.setItem('cm_analysis_mode', state.analysisModeSetting);
+  if (stockfish && typeof stockfish.setMode === 'function') {
+    stockfish.setMode(state.analysisModeSetting);
+  }
+}
+
+function applyAnalysisLineCount() {
+  analysisLinesRangeEl.value = String(state.analysisLineCount);
+  analysisLinesValueEl.textContent = String(state.analysisLineCount);
+  localStorage.setItem('cm_analysis_lines', String(state.analysisLineCount));
+  if (stockfish && typeof stockfish.setMultiPv === 'function') {
+    stockfish.setMultiPv(state.analysisLineCount);
+  }
+}
+
+function setAnalysisMode(mode) {
+  if (!ANALYSIS_MODES.includes(mode) || state.analysisModeSetting === mode) return;
+  state.analysisModeSetting = mode;
+  applyAnalysisMode();
+}
+
+function setAnalysisLineCount(count) {
+  if (!ANALYSIS_LINE_COUNTS.includes(count) || state.analysisLineCount === count) return;
+  state.analysisLineCount = count;
+  applyAnalysisLineCount();
 }
 
 const positionCache = createPositionCache({
@@ -490,6 +530,25 @@ document.getElementById('copyFenBtn').addEventListener('click', async () => {
     await navigator.clipboard.writeText(fen);
   } catch (_) {}
 });
+analysisDepthBtnEl.addEventListener('click', () => {
+  setAnalysisMode('depth20');
+});
+analysisInfiniteBtnEl.addEventListener('click', () => {
+  setAnalysisMode('infinite');
+});
+analysisPlayBtnEl.addEventListener('click', () => {
+  if (stockfish && typeof stockfish.requestAnalysis === 'function') {
+    stockfish.requestAnalysis(positionCache.currentFen());
+  }
+});
+analysisLinesRangeEl.addEventListener('input', () => {
+  setAnalysisLineCount(Number(analysisLinesRangeEl.value));
+});
+analysisPauseBtnEl.addEventListener('click', () => {
+  if (stockfish && typeof stockfish.stopAnalysis === 'function') {
+    stockfish.stopAnalysis();
+  }
+});
 
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && themeMenuEl && !themeMenuEl.hidden) {
@@ -544,6 +603,11 @@ document.addEventListener('click', (event) => {
 
 async function boot() {
   applyTheme();
+  engineStateEl.textContent = stockfish && typeof stockfish.getModelLabel === 'function'
+    ? stockfish.getModelLabel()
+    : 'Stockfish 17.1 Lite';
+  applyAnalysisMode();
+  applyAnalysisLineCount();
 
   if (typeof window.Chess !== 'function') {
     boardTitleEl.textContent = 'Ошибка загрузки chess.js';
