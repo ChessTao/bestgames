@@ -286,7 +286,6 @@
         const row = Math.floor(idx / 8), col = idx % 8;
         if (col === 0) { const rank = document.createElement('span'); rank.className = 'coord rank'; rank.textContent = sq[1]; square.appendChild(rank); }
         if (row === 7) { const file = document.createElement('span'); file.className = 'coord file'; file.textContent = sq[0]; square.appendChild(file); }
-        square.addEventListener('click', onSquareClick);
         boardEl.appendChild(square);
       });
       updateStatus(chess);
@@ -365,8 +364,8 @@
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'table-sort-btn' + (state.sortKey === column.key ? ' active' : '');
+          btn.dataset.sortKey = column.key;
           btn.textContent = column.label + sortIndicator(column.key);
-          btn.addEventListener('click', () => setGamesSort(column.key));
           th.appendChild(btn);
         } else {
           th.textContent = column.label;
@@ -380,7 +379,7 @@
       sortedGames().forEach((game, orderIndex) => {
         const row = document.createElement('tr');
         row.className = game.id === state.gameIndex ? 'active' : '';
-        row.addEventListener('click', () => selectGame(game.id));
+        row.dataset.gameId = String(game.id);
 
         const cells = [
           String(orderIndex + 1),
@@ -404,6 +403,11 @@
       });
       table.appendChild(tbody);
       gamesListEl.appendChild(table);
+    }
+    function updateGamesSelectionState() {
+      gamesListEl.querySelectorAll('tbody tr[data-game-id]').forEach((rowEl) => {
+        rowEl.classList.toggle('active', rowEl.dataset.gameId === String(state.gameIndex));
+      });
     }
     function createAnalysisNode(parent, move, fen) { return { id: state.analysisNodeSeq++, parent, move, fen, children: [] }; }
     function clearAnalysis() { state.analysisMode = false; state.analysisBaseIndex = null; state.analysisRoot = null; state.analysisCurrentNode = null; }
@@ -501,7 +505,7 @@
         whiteBtn.type = 'button';
         whiteBtn.className = 'move-btn' + (state.replayIndex === i + 1 && !state.analysisMode ? ' current' : '');
         whiteBtn.textContent = game.moves[i].san;
-        whiteBtn.addEventListener('click', () => goToReplay(i + 1));
+        whiteBtn.dataset.replayIndex = String(i + 1);
         row.appendChild(whiteBtn);
         const blackCell = document.createElement('div');
         if (game.moves[i + 1]) {
@@ -509,7 +513,7 @@
           blackBtn.type = 'button';
           blackBtn.className = 'move-btn' + (state.replayIndex === i + 2 && !state.analysisMode ? ' current' : '');
           blackBtn.textContent = game.moves[i + 1].san;
-          blackBtn.addEventListener('click', () => goToReplay(i + 2));
+          blackBtn.dataset.replayIndex = String(i + 2);
           blackCell.appendChild(blackBtn);
         }
         row.appendChild(blackCell);
@@ -518,17 +522,49 @@
       }
       if (rootVariationBlock && !movesWrapEl.querySelector('.variation-block')) movesWrapEl.appendChild(rootVariationBlock);
     }
+    function updateCurrentMoveState() {
+      const currentReplayIndex = String(state.replayIndex);
+      movesWrapEl.querySelectorAll('.move-btn[data-replay-index]').forEach((btnEl) => {
+        btnEl.classList.toggle('current', !state.analysisMode && btnEl.dataset.replayIndex === currentReplayIndex);
+      });
+      movesWrapEl.querySelectorAll('.variation-btn[data-node-id]').forEach((btnEl) => {
+        const isCurrent = state.analysisMode && state.analysisCurrentNode && btnEl.dataset.nodeId === String(state.analysisCurrentNode.id);
+        btnEl.classList.toggle('current', Boolean(isCurrent));
+      });
+    }
     function updateHeader() {
       const game = currentGame();
       boardTitleEl.textContent = game.title;
       boardSubtitleEl.textContent = `${game.headers.Event || 'Без турнира'} • ${game.headers.Site || 'Без места'} • ${game.headers.Date || 'Без даты'} • ${game.headers.Result || '*'}`;
       resetAnalysisBtnEl.classList.toggle('visible', Boolean(state.analysisMode && state.analysisRoot));
     }
-    function goToReplay(index) { const game = currentGame(); state.replayIndex = Math.max(0, Math.min(index, game.moves.length)); leaveAnalysisView(); state.selectedSquare = null; state.legalTargets = []; state.lastMove = game.states[state.replayIndex].move || null; persistState(); refresh(); }
-    function selectGame(index) { state.gameIndex = index; state.replayIndex = 0; clearAnalysis(); state.selectedSquare = null; state.legalTargets = []; state.lastMove = null; persistState(); refresh(); renderGamesList(); }
+    function goToReplay(index) {
+      const game = currentGame();
+      const hadAnalysisView = state.analysisMode;
+      state.replayIndex = Math.max(0, Math.min(index, game.moves.length));
+      leaveAnalysisView();
+      state.selectedSquare = null;
+      state.legalTargets = [];
+      state.lastMove = game.states[state.replayIndex].move || null;
+      persistState();
+      refresh({ renderMoves: hadAnalysisView });
+    }
+    function selectGame(index) {
+      state.gameIndex = index;
+      state.replayIndex = 0;
+      clearAnalysis();
+      state.selectedSquare = null;
+      state.legalTargets = [];
+      state.lastMove = null;
+      persistState();
+      refresh({ renderMoves: true });
+      updateGamesSelectionState();
+    }
     function legalMovesFrom(square) { return currentChess().moves({ square, verbose: true }) || []; }
     function onSquareClick(event) {
-      const sq = event.currentTarget.dataset.square; const chess = currentChess(); const piece = chess.get(sq);
+      const squareEl = event.target.closest('.square[data-square]');
+      if (!squareEl) return;
+      const sq = squareEl.dataset.square; const chess = currentChess(); const piece = chess.get(sq);
       if (state.selectedSquare) {
         const from = state.selectedSquare; const legal = legalMovesFrom(from); const candidate = legal.find(m => m.to === sq);
         if (candidate) {
@@ -580,15 +616,17 @@
         }
       });
     }
-    function refresh() {
+    function refresh({ renderMoves: shouldRenderMoves = true } = {}) {
       updateHeader();
       renderBoard();
-      renderMoves();
+      if (shouldRenderMoves) renderMoves();
+      else updateCurrentMoveState();
       scrollCurrentMoveIntoView();
       if (stockfish) stockfish.requestAnalysis(currentChess().fen());
     }
     document.getElementById('flipBtn').addEventListener('click', () => { state.orientation = state.orientation === 'white' ? 'black' : 'white'; persistState(); renderBoard(); });
     boardResizeHandleEl.addEventListener('pointerdown', beginBoardResize);
+    boardEl.addEventListener('click', onSquareClick);
     themeToggleBtnEl.addEventListener('click', (event) => {
       event.stopPropagation();
       toggleThemeMenu();
@@ -598,6 +636,23 @@
         setTheme(optionEl.dataset.theme);
         closeThemeMenu();
       });
+    });
+    movesWrapEl.addEventListener('click', (event) => {
+      const replayBtn = event.target.closest('.move-btn[data-replay-index]');
+      if (replayBtn) {
+        goToReplay(Number(replayBtn.dataset.replayIndex));
+      }
+    });
+    gamesListEl.addEventListener('click', (event) => {
+      const sortBtn = event.target.closest('.table-sort-btn[data-sort-key]');
+      if (sortBtn) {
+        setGamesSort(sortBtn.dataset.sortKey);
+        return;
+      }
+      const gameRow = event.target.closest('tr[data-game-id]');
+      if (gameRow) {
+        selectGame(Number(gameRow.dataset.gameId));
+      }
     });
     document.getElementById('startBtn').addEventListener('click', () => goToReplay(0));
     document.getElementById('prevBtn').addEventListener('click', () => { if (state.analysisMode && state.analysisCurrentNode && state.analysisCurrentNode.parent) return goToAnalysisNode(state.analysisCurrentNode.parent); goToReplay(state.replayIndex - 1); });
