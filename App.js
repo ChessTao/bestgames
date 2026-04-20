@@ -76,6 +76,8 @@
       lastMove: null
     };
     const BOARD_MIN_SIZE = 320;
+    let cachedPositionFen = null;
+    let cachedPositionChess = null;
 
     function boardMaxSize() {
       const panelWidth = boardShellEl.parentElement ? boardShellEl.parentElement.clientWidth - 28 : 700;
@@ -240,9 +242,16 @@
       return games;
     }
     function currentGame() { return state.games[state.gameIndex]; }
+    function currentFen() {
+      if (state.analysisMode && state.analysisCurrentNode) return state.analysisCurrentNode.fen;
+      return currentGame().states[state.replayIndex].fen;
+    }
     function currentChess() {
-      if (state.analysisMode && state.analysisCurrentNode) return new Chess(state.analysisCurrentNode.fen);
-      return new Chess(currentGame().states[state.replayIndex].fen);
+      const fen = currentFen();
+      if (cachedPositionFen === fen && cachedPositionChess) return cachedPositionChess;
+      cachedPositionFen = fen;
+      cachedPositionChess = new Chess(fen);
+      return cachedPositionChess;
     }
     function boardSquares() {
       const files = state.orientation === 'white' ? FILES : [...FILES].reverse();
@@ -560,13 +569,13 @@
       refresh({ renderMoves: true });
       updateGamesSelectionState();
     }
-    function legalMovesFrom(square) { return currentChess().moves({ square, verbose: true }) || []; }
+    function legalMovesFrom(square, chess = currentChess()) { return chess.moves({ square, verbose: true }) || []; }
     function onSquareClick(event) {
       const squareEl = event.target.closest('.square[data-square]');
       if (!squareEl) return;
       const sq = squareEl.dataset.square; const chess = currentChess(); const piece = chess.get(sq);
       if (state.selectedSquare) {
-        const from = state.selectedSquare; const legal = legalMovesFrom(from); const candidate = legal.find(m => m.to === sq);
+        const from = state.selectedSquare; const legal = legalMovesFrom(from, chess); const candidate = legal.find(m => m.to === sq);
         if (candidate) {
           if (!state.analysisMode) beginAnalysisFromReplay();
           const parentNode = state.analysisCurrentNode; const analysisChess = new Chess(parentNode.fen); const playedMove = analysisChess.move({ from, to: sq, promotion: candidate.promotion || 'q' });
@@ -575,7 +584,7 @@
           state.analysisCurrentNode = nextNode; state.lastMove = nextNode.move || null; state.selectedSquare = null; state.legalTargets = []; refresh(); return;
         }
       }
-      if (piece && piece.color === chess.turn()) { state.selectedSquare = sq; state.legalTargets = legalMovesFrom(sq).map(m => m.to); }
+      if (piece && piece.color === chess.turn()) { state.selectedSquare = sq; state.legalTargets = legalMovesFrom(sq, chess).map(m => m.to); }
       else { state.selectedSquare = null; state.legalTargets = []; }
       renderBoard();
     }
@@ -617,12 +626,13 @@
       });
     }
     function refresh({ renderMoves: shouldRenderMoves = true } = {}) {
+      const chess = currentChess();
       updateHeader();
       renderBoard();
       if (shouldRenderMoves) renderMoves();
       else updateCurrentMoveState();
       scrollCurrentMoveIntoView();
-      if (stockfish) stockfish.requestAnalysis(currentChess().fen());
+      if (stockfish) stockfish.requestAnalysis(chess.fen());
     }
     document.getElementById('flipBtn').addEventListener('click', () => { state.orientation = state.orientation === 'white' ? 'black' : 'white'; persistState(); renderBoard(); });
     boardResizeHandleEl.addEventListener('pointerdown', beginBoardResize);
@@ -659,7 +669,7 @@
     document.getElementById('nextBtn').addEventListener('click', () => { if (state.analysisMode && state.analysisCurrentNode && state.analysisCurrentNode.children[0]) return goToAnalysisNode(state.analysisCurrentNode.children[0]); goToReplay(state.replayIndex + 1); });
     document.getElementById('endBtn').addEventListener('click', () => { if (state.analysisMode && state.analysisCurrentNode) { let node = state.analysisCurrentNode; while (node.children[0]) node = node.children[0]; return goToAnalysisNode(node); } goToReplay(currentGame().moves.length); });
     document.getElementById('resetAnalysisBtn').addEventListener('click', () => { const target = state.analysisBaseIndex !== null ? state.analysisBaseIndex : state.replayIndex; goToReplay(target); });
-    document.getElementById('copyFenBtn').addEventListener('click', async () => { const fen = currentChess().fen(); try { await navigator.clipboard.writeText(fen); } catch (_) {} });
+    document.getElementById('copyFenBtn').addEventListener('click', async () => { const fen = currentFen(); try { await navigator.clipboard.writeText(fen); } catch (_) {} });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && themeMenuEl && !themeMenuEl.hidden) {
         closeThemeMenu();
