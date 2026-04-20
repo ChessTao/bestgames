@@ -66,10 +66,16 @@ function serveFile(req, res, filePath) {
 
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+    const cacheControl = ['.html', '.js', '.css'].includes(ext)
+      ? 'no-store, no-cache, must-revalidate'
+      : 'public, max-age=3600';
 
     res.writeHead(200, {
       'Content-Type': contentType,
-      'Content-Length': stats.size
+      'Content-Length': stats.size,
+      'Cache-Control': cacheControl,
+      'Pragma': 'no-cache',
+      'Expires': '0'
     });
 
     const stream = fs.createReadStream(filePath);

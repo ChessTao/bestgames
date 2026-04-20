@@ -35,7 +35,7 @@
     const evalLineEl = document.getElementById('evalLine');
     const bestMoveLineEl = document.getElementById('bestMoveLine');
     const pvLineEl = document.getElementById('pvLine');
-    const THEMES = ['classic', 'light', 'blue', 'green', 'orange', 'teal'];
+    const THEMES = ['classic', 'light', 'blue'];
     const stockfish = typeof window.createStockfishController === 'function'
       ? window.createStockfishController({
           onStateChange: ({ engineState, evalText, bestMoveText, pvText }) => {
