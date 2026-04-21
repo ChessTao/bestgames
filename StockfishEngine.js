@@ -3,6 +3,7 @@
   const MODEL_LABEL = 'Stockfish 17.1 Lite';
   const ANALYSIS_DEBOUNCE_MS = 120;
   const ANALYSIS_STOP_MS = 1800;
+  const STOP_TIMEOUT_MS = 1200;
   const READY_TIMEOUT_MS = 10000;
   const DISPLAY_PV_PLY_LIMIT = 10;
   const ANALYSIS_MODES = {
@@ -13,7 +14,7 @@
   function scoreText(type, value) {
     if (type === 'mate') return `Мат в ${value}`;
     if (type === 'cp') return `${(value / 100).toFixed(2)}`;
-    return '—';
+    return '-';
   }
 
   function whitePerspectiveFactor(fen) {
@@ -22,7 +23,7 @@
   }
 
   function formatPvMoves(fen, pvLine) {
-    if (typeof window.Chess !== 'function' || !fen || !pvLine) return pvLine || '—';
+    if (typeof window.Chess !== 'function' || !fen || !pvLine) return pvLine || '-';
 
     try {
       const chess = new window.Chess(fen);
@@ -49,7 +50,7 @@
 
       return parts.join(' ');
     } catch (_) {
-      return pvLine || '—';
+      return pvLine || '-';
     }
   }
 
@@ -60,6 +61,8 @@
     const state = {
       worker: null,
       ready: false,
+      failed: false,
+      initialized: false,
       fen: null,
       pendingFen: null,
       perspective: 1,
@@ -67,10 +70,14 @@
       multiPv: 1,
       readyTimer: null,
       timer: null,
+      stopTimer: null,
       debounceTimer: null,
       activeAnalysisId: 0,
       currentDepth: null,
-      pvLines: {}
+      pvLines: {},
+      searching: false,
+      stopping: false,
+      optionsDirty: false
     };
 
     function emit(payload) {
@@ -86,15 +93,99 @@
         const suffix = entry.score ? ` (${entry.score})` : '';
         lines.push(`${prefix}${entry.text}${suffix}`);
       }
-      return lines.join('\n') || '—';
+      return lines.join('\n') || '-';
     }
 
     function showUnavailable(reason = 'Встроенный движок не стартовал.') {
       emit({
-        engineState: `${MODEL_LABEL}: запуск не удался`,
-        evalText: 'Глубина: —',
+        engineState: `${MODEL_LABEL}: ошибка`,
+        evalText: 'Глубина: -',
         pvText: reason
       });
+    }
+
+    function resetSearchState() {
+      clearTimeout(state.timer);
+      clearTimeout(state.stopTimer);
+      clearTimeout(state.debounceTimer);
+      state.pendingFen = null;
+      state.fen = null;
+      state.currentDepth = null;
+      state.pvLines = {};
+      state.searching = false;
+      state.stopping = false;
+    }
+
+    function handleFailure(error) {
+      console.error('Stockfish error', error);
+      if (state.worker) {
+        try {
+          state.worker.terminate();
+        } catch (_) {}
+      }
+      state.worker = null;
+      state.ready = false;
+      state.failed = true;
+      clearTimeout(state.readyTimer);
+      clearTimeout(state.stopTimer);
+      resetSearchState();
+      showUnavailable('Движок остановлен после ошибки. Нажмите Play, чтобы запустить его заново.');
+    }
+
+    function post(command) {
+      if (!state.worker || state.failed) return false;
+      try {
+        state.worker.postMessage(command);
+        return true;
+      } catch (error) {
+        handleFailure(error);
+        return false;
+      }
+    }
+
+    function requestStop() {
+      if (!state.worker || !state.searching || state.stopping) return;
+      state.stopping = post('stop');
+      if (state.stopping) {
+        emit({ engineState: `${MODEL_LABEL}: останавливается` });
+        clearTimeout(state.stopTimer);
+        state.stopTimer = setTimeout(() => {
+          if (!state.stopping) return;
+          restartAfterStuckStop();
+        }, STOP_TIMEOUT_MS);
+      }
+    }
+
+    function finishSearch() {
+      clearTimeout(state.timer);
+      clearTimeout(state.stopTimer);
+      const nextFen = state.pendingFen;
+      state.searching = false;
+      state.stopping = false;
+      state.fen = null;
+      if (nextFen) scheduleAnalysis(nextFen);
+      else emit({ engineState: `${MODEL_LABEL}: готов` });
+    }
+
+    function restartAfterStuckStop() {
+      const nextFen = state.pendingFen;
+      if (state.worker) {
+        try {
+          state.worker.terminate();
+        } catch (_) {}
+      }
+      state.worker = null;
+      state.ready = false;
+      state.failed = false;
+      state.initialized = false;
+      resetSearchState();
+      if (!nextFen) {
+        emit({ engineState: `${MODEL_LABEL}: готов` });
+        return;
+      }
+      state.pendingFen = nextFen;
+      emit({ engineState: `${MODEL_LABEL}: перезапуск` });
+      init();
     }
 
     function handleMessage(event) {
@@ -104,9 +195,7 @@
       if (line === 'readyok') {
         state.ready = true;
         clearTimeout(state.readyTimer);
-        if (state.pendingFen) {
-          scheduleAnalysis(state.pendingFen);
-        }
+        if (state.pendingFen) scheduleAnalysis(state.pendingFen);
         return;
       }
 
@@ -133,55 +222,61 @@
         }
 
         emit({
-          evalText: `Глубина: ${state.currentDepth || '—'}`,
+          engineState: `${MODEL_LABEL}: анализирует`,
+          evalText: `Глубина: ${state.currentDepth || '-'}`,
           pvText: currentPvText()
         });
         return;
       }
 
       if (line.startsWith('bestmove')) {
-        clearTimeout(state.timer);
+        finishSearch();
       }
     }
 
     function init() {
+      if (state.worker || (state.initialized && !state.failed)) return;
+      state.initialized = true;
+      state.failed = false;
+      emit({ engineState: `${MODEL_LABEL}: запускается` });
+
       try {
         const absoluteWorkerUrl = new URL(workerUrl, window.location.href).href;
         const worker = new Worker(absoluteWorkerUrl);
         state.worker = worker;
         worker.onmessage = handleMessage;
         worker.onerror = (error) => {
-          console.error('Stockfish worker error', error);
-          state.worker = null;
-          state.ready = false;
-          clearTimeout(state.readyTimer);
-          clearTimeout(state.timer);
-          clearTimeout(state.debounceTimer);
           const details = [
             error && error.message ? error.message : null,
             error && error.filename ? error.filename : null,
-            Number.isFinite(error && error.lineno) ? `line ${error.lineno}` : null
-          ].filter(Boolean).join(' • ');
-          showUnavailable(details || 'Ошибка worker при запуске движка.');
+            Number.isFinite(error && error.lineno) ? `строка ${error.lineno}` : null
+          ].filter(Boolean).join(' - ');
+          handleFailure(error);
+          if (details) showUnavailable(details);
         };
         state.readyTimer = setTimeout(() => {
           if (state.ready) return;
-          console.error('Stockfish worker init timeout');
-          showUnavailable('Движок не ответил readyok вовремя.');
+          handleFailure(new Error('Stockfish ready timeout'));
+          showUnavailable('Движок не ответил readyok вовремя. Откройте проект через server.js.');
         }, READY_TIMEOUT_MS);
-        worker.postMessage('uci');
-        worker.postMessage(`setoption name MultiPV value ${state.multiPv}`);
-        worker.postMessage('isready');
-        worker.postMessage('ucinewgame');
+        post('uci');
+        post(`setoption name MultiPV value ${state.multiPv}`);
+        post('isready');
+        post('ucinewgame');
       } catch (error) {
-        console.error(error);
+        handleFailure(error);
         showUnavailable();
       }
     }
 
     function runAnalysis(fen) {
       if (!state.worker || !fen || !state.ready) return;
-      if (state.fen === fen) return;
+
+      if (state.searching) {
+        state.pendingFen = fen;
+        requestStop();
+        return;
+      }
 
       state.activeAnalysisId += 1;
       const analysisId = state.activeAnalysisId;
@@ -190,31 +285,36 @@
       state.perspective = whitePerspectiveFactor(fen);
       state.currentDepth = null;
       state.pvLines = {};
+      state.searching = true;
+      state.stopping = false;
 
       emit({
-        evalText: 'Глубина: —',
-        pvText: '—'
+        engineState: `${MODEL_LABEL}: анализирует`,
+        evalText: 'Глубина: -',
+        pvText: '-'
       });
 
-      try {
-        clearTimeout(state.timer);
-        state.worker.postMessage('stop');
-        state.worker.postMessage('position fen ' + fen);
-        state.worker.postMessage(ANALYSIS_MODES[state.mode].command);
-        if (state.mode !== 'infinite') {
-          state.timer = setTimeout(() => {
-            if (!state.worker || analysisId !== state.activeAnalysisId) return;
-            state.worker.postMessage('stop');
-          }, ANALYSIS_STOP_MS);
-        }
-      } catch (error) {
-        console.error(error);
+      clearTimeout(state.timer);
+      if (state.optionsDirty) {
+        post(`setoption name MultiPV value ${state.multiPv}`);
+        state.optionsDirty = false;
+      }
+      if (!post('position fen ' + fen) || !post(ANALYSIS_MODES[state.mode].command)) return;
+      if (state.mode !== 'infinite') {
+        state.timer = setTimeout(() => {
+          if (!state.worker || analysisId !== state.activeAnalysisId || !state.searching) return;
+          requestStop();
+        }, ANALYSIS_STOP_MS);
       }
     }
 
     function scheduleAnalysis(fen) {
       if (!state.worker || !fen) return;
       state.pendingFen = fen;
+      if (state.searching) {
+        requestStop();
+        return;
+      }
       clearTimeout(state.debounceTimer);
       state.debounceTimer = setTimeout(() => {
         runAnalysis(state.pendingFen);
@@ -222,12 +322,14 @@
     }
 
     function requestAnalysis(fen) {
-      if (!state.worker || !fen) return;
+      if (!fen) return;
+      if (!state.worker || state.failed) init();
+      if (!state.worker) return;
       if (!state.ready) {
         state.pendingFen = fen;
         return;
       }
-      if (state.fen === fen && !state.pendingFen) return;
+      if (state.fen === fen && !state.pendingFen && state.searching) return;
       scheduleAnalysis(fen);
     }
 
@@ -237,7 +339,7 @@
       state.mode = mode;
       clearTimeout(state.timer);
       clearTimeout(state.debounceTimer);
-      if (state.worker) state.worker.postMessage('stop');
+      if (state.searching) requestStop();
       if (state.fen) {
         const fen = state.fen;
         state.fen = null;
@@ -250,30 +352,29 @@
       if (state.multiPv === nextValue) return;
       state.multiPv = nextValue;
       state.pvLines = {};
-      if (state.worker) {
-        state.worker.postMessage(`setoption name MultiPV value ${state.multiPv}`);
-        state.worker.postMessage('isready');
+      state.optionsDirty = true;
+      if (state.searching) {
+        requestStop();
+      } else if (state.worker) {
+        post(`setoption name MultiPV value ${state.multiPv}`);
+        state.optionsDirty = false;
       }
       clearTimeout(state.timer);
       clearTimeout(state.debounceTimer);
-      if (state.worker) state.worker.postMessage('stop');
       if (state.fen) {
         const fen = state.fen;
         state.fen = null;
         scheduleAnalysis(fen);
       } else {
-        emit({ pvText: '—' });
+        emit({ pvText: '-' });
       }
     }
 
     function stopAnalysis() {
-      clearTimeout(state.timer);
       clearTimeout(state.debounceTimer);
       state.pendingFen = null;
-      state.fen = null;
-      if (state.worker) {
-        state.worker.postMessage('stop');
-      }
+      if (state.searching) requestStop();
+      else resetSearchState();
     }
 
     return {
