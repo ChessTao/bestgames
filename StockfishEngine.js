@@ -6,10 +6,13 @@
   const STOP_TIMEOUT_MS = 1200;
   const READY_TIMEOUT_MS = 10000;
   const DISPLAY_PV_PLY_LIMIT = 10;
+  const PV_FORMAT_CACHE_LIMIT = 120;
   const ANALYSIS_MODES = {
     depth20: { command: 'go depth 20' },
     infinite: { command: 'go infinite' }
   };
+  const pvFormatCache = new Map();
+  const SERVER_HINT = 'Откройте проект через локальный сервер: node server.js, затем http://127.0.0.1:8000/index.html.';
 
   function scoreText(type, value) {
     if (type === 'mate') return `Мат в ${value}`;
@@ -24,6 +27,9 @@
 
   function formatPvMoves(fen, pvLine) {
     if (typeof window.Chess !== 'function' || !fen || !pvLine) return pvLine || '-';
+
+    const cacheKey = `${fen}|${pvLine}`;
+    if (pvFormatCache.has(cacheKey)) return pvFormatCache.get(cacheKey);
 
     try {
       const chess = new window.Chess(fen);
@@ -48,7 +54,12 @@
         parts.push(move.san);
       });
 
-      return parts.join(' ');
+      const result = parts.join(' ');
+      pvFormatCache.set(cacheKey, result);
+      if (pvFormatCache.size > PV_FORMAT_CACHE_LIMIT) {
+        pvFormatCache.delete(pvFormatCache.keys().next().value);
+      }
+      return result;
     } catch (_) {
       return pvLine || '-';
     }
@@ -96,8 +107,9 @@
       return lines.join('\n') || '-';
     }
 
-    function showUnavailable(reason = 'Встроенный движок не стартовал.') {
+    function showUnavailable(reason = `Встроенный движок не стартовал. ${SERVER_HINT}`) {
       emit({
+        engineStatus: 'error',
         engineState: `${MODEL_LABEL}: ошибка`,
         evalText: 'Глубина: -',
         pvText: reason
@@ -129,7 +141,7 @@
       clearTimeout(state.readyTimer);
       clearTimeout(state.stopTimer);
       resetSearchState();
-      showUnavailable('Движок остановлен после ошибки. Нажмите Play, чтобы запустить его заново.');
+      showUnavailable('Движок остановлен после ошибки. Нажмите ▶, чтобы запустить его заново.');
     }
 
     function post(command) {
@@ -147,7 +159,7 @@
       if (!state.worker || !state.searching || state.stopping) return;
       state.stopping = post('stop');
       if (state.stopping) {
-        emit({ engineState: `${MODEL_LABEL}: останавливается` });
+        emit({ engineStatus: 'stopping', engineState: `${MODEL_LABEL}: останавливается` });
         clearTimeout(state.stopTimer);
         state.stopTimer = setTimeout(() => {
           if (!state.stopping) return;
@@ -164,7 +176,7 @@
       state.stopping = false;
       state.fen = null;
       if (nextFen) scheduleAnalysis(nextFen);
-      else emit({ engineState: `${MODEL_LABEL}: готов` });
+      else emit({ engineStatus: 'ready', engineState: `${MODEL_LABEL}: готов` });
     }
 
     function restartAfterStuckStop() {
@@ -180,11 +192,11 @@
       state.initialized = false;
       resetSearchState();
       if (!nextFen) {
-        emit({ engineState: `${MODEL_LABEL}: готов` });
+        emit({ engineStatus: 'ready', engineState: `${MODEL_LABEL}: готов` });
         return;
       }
       state.pendingFen = nextFen;
-      emit({ engineState: `${MODEL_LABEL}: перезапуск` });
+      emit({ engineStatus: 'restarting', engineState: `${MODEL_LABEL}: перезапуск` });
       init();
     }
 
@@ -195,6 +207,7 @@
       if (line === 'readyok') {
         state.ready = true;
         clearTimeout(state.readyTimer);
+        emit({ engineStatus: 'ready', engineState: `${MODEL_LABEL}: готов` });
         if (state.pendingFen) scheduleAnalysis(state.pendingFen);
         return;
       }
@@ -222,6 +235,7 @@
         }
 
         emit({
+          engineStatus: 'searching',
           engineState: `${MODEL_LABEL}: анализирует`,
           evalText: `Глубина: ${state.currentDepth || '-'}`,
           pvText: currentPvText()
@@ -238,9 +252,15 @@
       if (state.worker || (state.initialized && !state.failed)) return;
       state.initialized = true;
       state.failed = false;
-      emit({ engineState: `${MODEL_LABEL}: запускается` });
+      emit({ engineStatus: 'starting', engineState: `${MODEL_LABEL}: запускается` });
 
       try {
+        if (typeof Worker !== 'function') {
+          throw new Error(`Web Worker недоступен в этом браузере. ${SERVER_HINT}`);
+        }
+        if (window.location.protocol === 'file:') {
+          throw new Error(`Движок не запускается со страницы file://. ${SERVER_HINT}`);
+        }
         const absoluteWorkerUrl = new URL(workerUrl, window.location.href).href;
         const worker = new Worker(absoluteWorkerUrl);
         state.worker = worker;
@@ -257,7 +277,7 @@
         state.readyTimer = setTimeout(() => {
           if (state.ready) return;
           handleFailure(new Error('Stockfish ready timeout'));
-          showUnavailable('Движок не ответил readyok вовремя. Откройте проект через server.js.');
+          showUnavailable(`Движок не ответил readyok вовремя. ${SERVER_HINT}`);
         }, READY_TIMEOUT_MS);
         post('uci');
         post(`setoption name MultiPV value ${state.multiPv}`);
@@ -265,7 +285,7 @@
         post('ucinewgame');
       } catch (error) {
         handleFailure(error);
-        showUnavailable();
+        showUnavailable(error && error.message ? error.message : undefined);
       }
     }
 
@@ -289,6 +309,7 @@
       state.stopping = false;
 
       emit({
+        engineStatus: 'searching',
         engineState: `${MODEL_LABEL}: анализирует`,
         evalText: 'Глубина: -',
         pvText: '-'

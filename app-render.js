@@ -23,6 +23,13 @@
       RANKS
     } = constants;
 
+    let renderedBoardOrientation = null;
+    let sortedGamesCache = null;
+    let sortedGamesSource = null;
+    let sortedGamesSortKey = null;
+    let sortedGamesSortDir = null;
+    const boardSquareEls = new Map();
+
     function boardSquares() {
       const files = state.orientation === 'white' ? FILES : [...FILES].reverse();
       const ranks = state.orientation === 'white' ? RANKS : [...RANKS].reverse();
@@ -43,11 +50,12 @@
       blackTurnDotEl.classList.toggle('active', !isWhiteTurn);
     }
 
-    function renderBoard() {
-      const chess = getCurrentChess();
+    function ensureBoardLayout() {
+      if (renderedBoardOrientation === state.orientation && boardSquareEls.size === 64) return;
+
       const squares = boardSquares();
-      const lastMove = state.lastMove;
-      boardEl.innerHTML = '';
+      const fragment = document.createDocumentFragment();
+      boardSquareEls.clear();
 
       squares.forEach((sq, index) => {
         const square = document.createElement('div');
@@ -56,20 +64,6 @@
         const isLight = (fileIndex + rankIndex) % 2 === 1;
         square.className = `square ${isLight ? 'light' : 'dark'}`;
         square.dataset.square = sq;
-
-        if (state.selectedSquare === sq) square.classList.add('selected');
-        if (state.legalTargets.includes(sq)) square.classList.add('legal');
-        if (lastMove && (lastMove.from === sq || lastMove.to === sq)) square.classList.add('last');
-
-        const piece = chess.get(sq);
-        const code = pieceCode(piece);
-        if (code) {
-          const img = document.createElement('img');
-          img.className = 'piece';
-          img.src = PIECES[code];
-          img.alt = code;
-          square.appendChild(img);
-        }
 
         const row = Math.floor(index / 8);
         const col = index % 8;
@@ -86,7 +80,43 @@
           square.appendChild(file);
         }
 
-        boardEl.appendChild(square);
+        boardSquareEls.set(sq, square);
+        fragment.appendChild(square);
+      });
+
+      boardEl.replaceChildren(fragment);
+      renderedBoardOrientation = state.orientation;
+    }
+
+    function syncSquarePiece(squareEl, code) {
+      const currentCode = squareEl.dataset.piece || '';
+      if (currentCode === (code || '')) return;
+
+      squareEl.dataset.piece = code || '';
+      const existingPiece = squareEl.querySelector('img.piece');
+      if (!code) {
+        if (existingPiece) existingPiece.remove();
+        return;
+      }
+
+      const pieceEl = existingPiece || document.createElement('img');
+      pieceEl.className = 'piece';
+      pieceEl.src = PIECES[code];
+      pieceEl.alt = code;
+      if (!existingPiece) squareEl.insertBefore(pieceEl, squareEl.firstChild);
+    }
+
+    function renderBoard() {
+      const chess = getCurrentChess();
+      const lastMove = state.lastMove;
+      const legalTargets = new Set(state.legalTargets);
+
+      ensureBoardLayout();
+      boardSquareEls.forEach((squareEl, sq) => {
+        squareEl.classList.toggle('selected', state.selectedSquare === sq);
+        squareEl.classList.toggle('legal', legalTargets.has(sq));
+        squareEl.classList.toggle('last', Boolean(lastMove && (lastMove.from === sq || lastMove.to === sq)));
+        syncSquarePiece(squareEl, pieceCode(chess.get(sq)));
       });
 
       updateStatus(chess);
@@ -127,7 +157,27 @@
     }
 
     function getSortedGames() {
-      return [...state.games].sort(compareGames);
+      if (
+        sortedGamesCache
+        && sortedGamesSource === state.games
+        && sortedGamesSortKey === state.sortKey
+        && sortedGamesSortDir === state.sortDir
+      ) {
+        return sortedGamesCache;
+      }
+
+      sortedGamesCache = [...state.games].sort(compareGames);
+      sortedGamesSource = state.games;
+      sortedGamesSortKey = state.sortKey;
+      sortedGamesSortDir = state.sortDir;
+      return sortedGamesCache;
+    }
+
+    function invalidateSortedGames() {
+      sortedGamesCache = null;
+      sortedGamesSource = null;
+      sortedGamesSortKey = null;
+      sortedGamesSortDir = null;
     }
 
     function sortIndicator(key) {
@@ -136,8 +186,7 @@
     }
 
     function renderGamesList() {
-      gamesListEl.innerHTML = '';
-
+      const fragment = document.createDocumentFragment();
       const table = document.createElement('table');
       table.className = 'games-table';
 
@@ -198,7 +247,8 @@
       });
 
       table.appendChild(tbody);
-      gamesListEl.appendChild(table);
+      fragment.appendChild(table);
+      gamesListEl.replaceChildren(fragment);
     }
 
     function updateGamesSelectionState() {
@@ -269,7 +319,7 @@
 
     function renderMoves() {
       const game = getCurrentGame();
-      movesWrapEl.innerHTML = '';
+      const fragment = document.createDocumentFragment();
 
       const anchorRowIndex = state.analysisRoot
         ? (state.analysisBaseIndex === 0 ? -1 : Math.ceil(state.analysisBaseIndex / 2) - 1)
@@ -278,7 +328,7 @@
         ? makeVariationBlock(state.analysisRoot.children, (state.analysisBaseIndex || 0) + 1)
         : null;
 
-      if (anchorRowIndex === -1 && rootVariationBlock) movesWrapEl.appendChild(rootVariationBlock);
+      if (anchorRowIndex === -1 && rootVariationBlock) fragment.appendChild(rootVariationBlock);
 
       for (let i = 0; i < game.moves.length; i += 2) {
         const rowIndex = Math.floor(i / 2);
@@ -308,15 +358,17 @@
         }
         row.appendChild(blackCell);
 
-        movesWrapEl.appendChild(row);
+        fragment.appendChild(row);
         if (anchorRowIndex === rowIndex && rootVariationBlock) {
-          movesWrapEl.appendChild(makeVariationBlock(state.analysisRoot.children, (state.analysisBaseIndex || 0) + 1));
+          fragment.appendChild(makeVariationBlock(state.analysisRoot.children, (state.analysisBaseIndex || 0) + 1));
         }
       }
 
-      if (rootVariationBlock && !movesWrapEl.querySelector('.variation-block')) {
-        movesWrapEl.appendChild(rootVariationBlock);
+      if (rootVariationBlock && !fragment.querySelector('.variation-block')) {
+        fragment.appendChild(rootVariationBlock);
       }
+
+      movesWrapEl.replaceChildren(fragment);
     }
 
     function updateCurrentMoveState() {
@@ -373,6 +425,7 @@
 
     return {
       getSortedGames,
+      invalidateSortedGames,
       renderBoard,
       renderGamesList,
       renderMoves,

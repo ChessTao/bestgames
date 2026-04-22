@@ -41,8 +41,8 @@
   }
 
   function compactGameLabel(headers) {
-    const white = headers.White || 'White';
-    const black = headers.Black || 'Black';
+    const white = headers.White || 'Белые';
+    const black = headers.Black || 'Черные';
     const whiteElo = headers.WhiteElo ? ` (${headers.WhiteElo})` : '';
     const blackElo = headers.BlackElo ? ` (${headers.BlackElo})` : '';
     const event = shortEventLabel(headers.Event || '');
@@ -69,7 +69,8 @@
 
         const headers = parseHeaders(chunk);
         const verboseMoves = chess.history({ verbose: true }) || [];
-        const replay = new window.Chess();
+        chess.reset();
+        const replay = chess;
         const states = [{ fen: replay.fen(), san: null, move: null, moveNumber: 0, from: null, to: null }];
 
         verboseMoves.forEach((move, moveIndex) => {
@@ -90,12 +91,12 @@
           headers,
           moves: verboseMoves,
           states,
-          title: `${headers.White || 'White'}${headers.WhiteElo ? ` (${headers.WhiteElo})` : ''} — ${headers.Black || 'Black'}${headers.BlackElo ? ` (${headers.BlackElo})` : ''}`,
+          title: `${headers.White || 'Белые'}${headers.WhiteElo ? ` (${headers.WhiteElo})` : ''} — ${headers.Black || 'Черные'}${headers.BlackElo ? ` (${headers.BlackElo})` : ''}`,
           subtitle: `${headers.Event || 'Без турнира'} • ${headers.Site || 'Без места'} • ${headers.Date || 'Без даты'}`,
           compactLabel: compactGameLabel(headers),
           result: headers.Result || '*',
-          white: headers.White || 'White',
-          black: headers.Black || 'Black',
+          white: headers.White || 'Белые',
+          black: headers.Black || 'Черные',
           whiteElo: headers.WhiteElo || '—',
           blackElo: headers.BlackElo || '—',
           event: headers.Event || '—',

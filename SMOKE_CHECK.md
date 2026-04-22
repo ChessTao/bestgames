@@ -1,16 +1,34 @@
 # Smoke-check
 
-1. Open the app through the local server, not as a `file://` page.
-   Recommended URL: `http://127.0.0.1:8000/Best%20Games.html`.
-2. Confirm that the games table loads and selecting another game updates the board and move list.
-3. Press Stockfish Play and wait until the depth line starts changing.
-4. While Stockfish is running, click several moves forward and backward quickly.
-   Expected: the engine keeps running, the status does not switch to error, and PV/eval update for the current board.
-5. Switch between depth 20 and infinite analysis while the engine is running.
-   Expected: the current analysis stops cleanly and restarts on the same position.
-6. Change the number of variations from 1 to 3 and then back to 1 while the engine is running.
-   Expected: the engine keeps responding and the PV area follows the selected count.
-7. Press Pause, move to another position, then press Play again.
-   Expected: analysis starts for the new current position.
-8. Flip the board and switch themes.
-   Expected: orientation/theme change does not affect the current engine session.
+## Автоматическая проверка
+
+Запуск:
+
+```powershell
+node smoke-check.js
+```
+
+Скрипт проверяет:
+
+- локальную копию `chess.js`;
+- разбор PGN и начальную позицию первой видимой партии;
+- ориентацию доски за белых при старте;
+- кэш отсортированного списка партий;
+- отдачу ключевых файлов через `server.js`.
+
+## Ручная проверка
+
+1. Запустить сервер:
+
+```powershell
+node server.js
+```
+
+2. Открыть `http://127.0.0.1:8000/index.html`.
+3. Убедиться, что список партий загружен, доска стоит в начальной позиции первой партии из списка и смотрит со стороны белых.
+4. Выбрать другую партию, пройти несколько ходов вперёд и назад.
+5. Переключить тему и перевернуть доску.
+6. Нажать ▶, дождаться анализа, перейти на другой ход, затем нажать ⏸.
+7. Переключить режим глубины/бесконечного анализа и количество вариантов.
+
+Ожидаемый результат: интерфейс не показывает ошибок, текущая позиция и подсветка ходов обновляются, движок запускается только вручную и корректно останавливается.

@@ -52,7 +52,13 @@ const ANALYSIS_LINE_COUNTS = [1, 2, 3, 4, 5];
 
 const stockfish = typeof window.createStockfishController === 'function'
   ? window.createStockfishController({
-      onStateChange: ({ engineState, evalText, pvText }) => {
+      onStateChange: ({ engineStatus, engineState, evalText, pvText }) => {
+        if (engineStatus === 'error') state.engineEnabled = false;
+        if (!state.engineEnabled && engineStatus && engineStatus !== 'error') {
+          updateEngineControls('idle');
+          return;
+        }
+        if (engineStatus !== undefined) updateEngineControls(engineStatus);
         if (engineState !== undefined) engineStateEl.textContent = engineState;
         if (evalText !== undefined) evalLineEl.textContent = evalText;
         if (pvText !== undefined) pvLineEl.textContent = pvText;
@@ -93,6 +99,17 @@ function setKeyboardScope(scope) {
   keyboardScope = scope;
 }
 
+function updateEngineControls(engineStatus = null) {
+  if (!analysisPlayBtnEl || !analysisPauseBtnEl) return;
+  const isBusy = state.engineEnabled && ['starting', 'searching', 'stopping', 'restarting'].includes(engineStatus);
+  analysisPlayBtnEl.disabled = Boolean(state.engineEnabled && engineStatus !== 'error');
+  analysisPauseBtnEl.disabled = !state.engineEnabled;
+  analysisPlayBtnEl.classList.toggle('active', Boolean(state.engineEnabled));
+  analysisPauseBtnEl.classList.toggle('active', Boolean(isBusy));
+  analysisPlayBtnEl.setAttribute('aria-pressed', state.engineEnabled ? 'true' : 'false');
+  analysisPauseBtnEl.setAttribute('aria-pressed', isBusy ? 'true' : 'false');
+}
+
 function applyAnalysisMode() {
   analysisDepthBtnEl.classList.toggle('active', state.analysisModeSetting === 'depth20');
   analysisInfiniteBtnEl.classList.toggle('active', state.analysisModeSetting === 'infinite');
@@ -127,14 +144,15 @@ function setAnalysisLineCount(count) {
 
 function setEngineIdleState() {
   if (engineStateEl) {
-    engineStateEl.textContent = 'Stockfish 17.1 Lite (manual)';
+    engineStateEl.textContent = 'Stockfish 17.1 Lite: выключен';
   }
   if (evalLineEl) {
-    evalLineEl.textContent = 'Depth: —';
+    evalLineEl.textContent = 'Глубина: —';
   }
   if (pvLineEl) {
-    pvLineEl.textContent = 'Press Play to start analysis.';
+    pvLineEl.textContent = 'Нажмите ▶, чтобы запустить анализ.';
   }
+  updateEngineControls('idle');
 }
 
 function requestCurrentAnalysisIfEnabled() {
@@ -145,8 +163,15 @@ function requestCurrentAnalysisIfEnabled() {
 }
 
 function startEngineAnalysis() {
-  if (!stockfish) return;
+  if (!stockfish) {
+    engineStateEl.textContent = 'Stockfish недоступен';
+    evalLineEl.textContent = 'Глубина: -';
+    pvLineEl.textContent = 'Не найден модуль движка.';
+    updateEngineControls('error');
+    return;
+  }
   state.engineEnabled = true;
+  updateEngineControls('starting');
   requestCurrentAnalysisIfEnabled();
 }
 
@@ -341,6 +366,7 @@ function setGamesSort(key) {
     state.sortKey = key;
     state.sortDir = key === 'date' ? 'desc' : 'asc';
   }
+  renderer.invalidateSortedGames();
   renderer.renderGamesList();
   updateGameNavButtons();
 }
@@ -631,13 +657,14 @@ async function boot() {
     setEngineIdleState();
   } else {
     engineStateEl.textContent = 'Stockfish 17.1 Lite';
+    updateEngineControls('idle');
   }
   applyAnalysisMode();
   applyAnalysisLineCount();
 
   if (typeof window.Chess !== 'function') {
     boardTitleEl.textContent = 'Ошибка загрузки chess.js';
-    boardSubtitleEl.textContent = 'Проверь подключение к интернету: без библиотеки браузер не сможет разобрать PGN.';
+    boardSubtitleEl.textContent = 'Проверь файл vendor/chess/chess-0.10.3.min.js: без библиотеки браузер не сможет разобрать PGN.';
     return;
   }
 
@@ -662,7 +689,6 @@ async function boot() {
   setOpeningPosition();
   renderer.renderGamesList();
   refresh();
-  if (stockfish) stockfish.init();
 }
 
 boot();
