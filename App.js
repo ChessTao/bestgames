@@ -445,21 +445,16 @@ function persistState() {
   localStorage.setItem('cm_orientation', state.orientation);
 }
 
-function restoreState() {
-  const savedGameIndex = Number(localStorage.getItem('cm_game_index'));
-  if (Number.isInteger(savedGameIndex) && savedGameIndex >= 0 && savedGameIndex < state.games.length) {
-    state.gameIndex = savedGameIndex;
-  }
-
-  const game = currentGame();
-  const savedReplayIndex = Number(localStorage.getItem('cm_replay_index'));
-  if (Number.isInteger(savedReplayIndex)) {
-    state.replayIndex = Math.max(0, Math.min(savedReplayIndex, game.moves.length));
-  } else {
-    state.replayIndex = 0;
-  }
-
-  state.lastMove = game.states[state.replayIndex].move || null;
+function setOpeningPosition() {
+  const firstListedGame = renderer.getSortedGames()[0];
+  state.gameIndex = firstListedGame ? firstListedGame.id : 0;
+  state.replayIndex = 0;
+  state.orientation = 'white';
+  state.selectedSquare = null;
+  state.legalTargets = [];
+  clearAnalysis();
+  state.lastMove = currentGame().states[0].move || null;
+  persistState();
 }
 
 function refresh({ renderMoves: shouldRenderMoves = true } = {}) {
@@ -664,7 +659,7 @@ async function boot() {
   }
 
   applyBoardSize();
-  restoreState();
+  setOpeningPosition();
   renderer.renderGamesList();
   refresh();
   if (stockfish) stockfish.init();
