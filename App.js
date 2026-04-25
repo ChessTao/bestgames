@@ -37,6 +37,8 @@ const themeOptionEls = Array.from(document.querySelectorAll('.theme-option'));
 const resetAnalysisBtnEl = document.getElementById('resetAnalysisBtn');
 const prevGameBtnEl = document.getElementById('prevGameBtn');
 const nextGameBtnEl = document.getElementById('nextGameBtn');
+const downloadGameBtnEl = document.getElementById('downloadGameBtn');
+const downloadAllGamesBtnEl = document.getElementById('downloadAllGamesBtn');
 const engineStateEl = document.getElementById('engineState');
 const analysisPlayBtnEl = document.getElementById('analysisPlayBtn');
 const analysisPauseBtnEl = document.getElementById('analysisPauseBtn');
@@ -68,6 +70,7 @@ const stockfish = typeof window.createStockfishController === 'function'
 
 const state = {
   games: [],
+  rawPgn: '',
   gameIndex: 0,
   replayIndex: 0,
   boardSize: Number(localStorage.getItem('cm_board_size')) || null,
@@ -93,6 +96,49 @@ let keyboardScope = 'viewer';
 
 function currentGame() {
   return state.games[state.gameIndex];
+}
+
+function sanitizeFilenamePart(value, fallback = 'game') {
+  const cleaned = String(value || '')
+    .normalize('NFKD')
+    .replace(/[^\w\s.-]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/ /g, '_');
+  return cleaned || fallback;
+}
+
+function triggerDownload(filename, content) {
+  if (!content) return;
+  const blob = new Blob([content], { type: 'application/x-chess-pgn; charset=utf-8' });
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+}
+
+function currentGameFilename() {
+  const game = currentGame();
+  if (!game) return 'game.pgn';
+  const white = sanitizeFilenamePart(game.headers.White, 'White');
+  const black = sanitizeFilenamePart(game.headers.Black, 'Black');
+  const date = sanitizeFilenamePart(game.headers.Date, 'undated');
+  return `${white}_vs_${black}_${date}.pgn`;
+}
+
+function downloadCurrentGame() {
+  const game = currentGame();
+  if (!game || !game.pgn) return;
+  triggerDownload(currentGameFilename(), `${String(game.pgn).trim()}\n`);
+}
+
+function downloadAllGames() {
+  if (!state.rawPgn) return;
+  triggerDownload('best-games-collection.pgn', `${String(state.rawPgn).trim()}\n`);
 }
 
 function setKeyboardScope(scope) {
@@ -584,6 +630,12 @@ document.getElementById('copyFenBtn').addEventListener('click', async () => {
     await navigator.clipboard.writeText(fen);
   } catch (_) {}
 });
+downloadGameBtnEl.addEventListener('click', () => {
+  downloadCurrentGame();
+});
+downloadAllGamesBtnEl.addEventListener('click', () => {
+  downloadAllGames();
+});
 analysisDepthBtnEl.addEventListener('click', () => {
   setAnalysisMode('depth20');
 });
@@ -652,6 +704,8 @@ document.addEventListener('click', (event) => {
 });
 
 async function boot() {
+  downloadGameBtnEl.disabled = true;
+  downloadAllGamesBtnEl.disabled = true;
   applyTheme();
   if (stockfish && typeof stockfish.getModelLabel === 'function') {
     setEngineIdleState();
@@ -678,6 +732,7 @@ async function boot() {
     return;
   }
 
+  state.rawPgn = rawPgn;
   state.games = buildGames(rawPgn);
   if (!state.games.length) {
     boardTitleEl.textContent = 'Партии не найдены';
@@ -685,6 +740,8 @@ async function boot() {
     return;
   }
 
+  downloadGameBtnEl.disabled = false;
+  downloadAllGamesBtnEl.disabled = false;
   applyBoardSize();
   setOpeningPosition();
   renderer.renderGamesList();
