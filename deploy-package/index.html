@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Гроссмейстер Валерий Авескулов — PGN Viewer</title>
+  <script src="vendor/chess/chess-0.10.3.min.js"></script>
+  <link rel="stylesheet" href="Styles.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div>
+        <h1>Мои партии</h1>
+      </div>
+      <div class="theme-switcher">
+        <button id="themeToggleBtn" class="theme-toggle-btn" type="button" aria-haspopup="true" aria-expanded="false">Тема</button>
+        <div id="themeMenu" class="theme-menu" hidden>
+          <button type="button" class="theme-option" data-theme="classic">Тёмная</button>
+          <button type="button" class="theme-option" data-theme="blue">Синяя</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <div id="gamesList" class="games-list"></div>
+      </section>
+
+      <section class="panel board-col">
+        <div class="board-head">
+          <div id="boardTitle" class="board-title">Загрузка…</div>
+          <div id="boardSubtitle" class="board-subtitle"></div>
+        </div>
+
+        <div class="board-shell">
+          <div id="board" class="board"></div>
+          <span id="whiteTurnDot" class="turn-dot white"></span>
+          <span id="blackTurnDot" class="turn-dot black"></span>
+          <button id="boardResizeHandle" class="board-resize-handle" type="button" title="Изменить размер доски" aria-label="Изменить размер доски"></button>
+        </div>
+
+        <div class="board-footer-actions">
+          <button id="downloadGameBtn" type="button">Скачать партию</button>
+          <button id="downloadAllGamesBtn" type="button">Скачать все партии</button>
+          <button id="prevGameBtn" type="button" title="Предыдущая партия" aria-label="Предыдущая партия">◀</button>
+          <button id="flipBtn">Перевернуть доску</button>
+          <button id="copyFenBtn">Копировать FEN</button>
+          <button id="nextGameBtn" type="button" title="Следующая партия" aria-label="Следующая партия">▶</button>
+        </div>
+      </section>
+
+      <section class="panel moves-col">
+        <div id="movesWrap" class="moves-wrap"></div>
+        <div class="moves-controls">
+          <div class="moves-nav-group">
+            <button id="startBtn" title="В начало партии" aria-label="В начало партии">⏮</button>
+            <button id="prevBtn" title="Ход назад" aria-label="Ход назад">◀</button>
+            <button id="nextBtn" title="Ход вперёд" aria-label="Ход вперёд">▶</button>
+            <button id="endBtn" title="В конец партии" aria-label="В конец партии">⏭</button>
+          </div>
+          <button id="resetAnalysisBtn" class="analysis-return-btn" title="Вернуться к партии" aria-label="Вернуться к партии">↺</button>
+        </div>
+        <div class="analysis-box">
+          <div class="analysis-head">
+            <div id="engineState" class="analysis-line">Stockfish 17.1 Lite</div>
+            <div class="analysis-controls">
+              <div class="analysis-mode-grid" aria-label="Управление анализом">
+                <button id="analysisPlayBtn" class="analysis-icon-btn" type="button" title="Запустить анализ" aria-label="Запустить анализ">▶</button>
+                <button id="analysisPauseBtn" class="analysis-icon-btn" type="button" title="Пауза анализа" aria-label="Остановить анализ">⏸</button>
+                <button id="analysisDepthBtn" class="analysis-mode-btn" type="button" title="Максимальная глубина 20" aria-label="Максимальная глубина 20">20</button>
+                <button id="analysisInfiniteBtn" class="analysis-mode-btn" type="button" title="Бесконечный анализ" aria-label="Бесконечный анализ">∞</button>
+              </div>
+              <div class="analysis-lines-control">
+                <label for="analysisLinesRange" class="analysis-lines-label">Количество вариантов</label>
+                <div class="analysis-lines-row">
+                  <input id="analysisLinesRange" class="analysis-lines-range" type="range" min="1" max="5" step="1" value="1" aria-label="Количество вариантов" />
+                  <span id="analysisLinesValue" class="analysis-lines-value">1</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="evalLine" class="analysis-line">Глубина: —</div>
+          <div id="pvLine" class="pv-line">—</div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script src="StockfishEngine.js"></script>
+  <script src="app-pgn.js"></script>
+  <script src="app-position.js"></script>
+  <script src="app-render.js"></script>
+  <script src="App.js"></script>
+</body>
+</html>

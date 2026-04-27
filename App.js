@@ -5,18 +5,18 @@ const { createPositionCache } = window.appPosition;
 const { createRenderer } = window.appRender;
 
 const PIECES = {
-  p: 'https://lichess1.org/assets/piece/cburnett/bP.svg',
-  r: 'https://lichess1.org/assets/piece/cburnett/bR.svg',
-  n: 'https://lichess1.org/assets/piece/cburnett/bN.svg',
-  b: 'https://lichess1.org/assets/piece/cburnett/bB.svg',
-  q: 'https://lichess1.org/assets/piece/cburnett/bQ.svg',
-  k: 'https://lichess1.org/assets/piece/cburnett/bK.svg',
-  P: 'https://lichess1.org/assets/piece/cburnett/wP.svg',
-  R: 'https://lichess1.org/assets/piece/cburnett/wR.svg',
-  N: 'https://lichess1.org/assets/piece/cburnett/wN.svg',
-  B: 'https://lichess1.org/assets/piece/cburnett/wB.svg',
-  Q: 'https://lichess1.org/assets/piece/cburnett/wQ.svg',
-  K: 'https://lichess1.org/assets/piece/cburnett/wK.svg'
+  p: 'vendor/pieces/cburnett/bP.svg',
+  r: 'vendor/pieces/cburnett/bR.svg',
+  n: 'vendor/pieces/cburnett/bN.svg',
+  b: 'vendor/pieces/cburnett/bB.svg',
+  q: 'vendor/pieces/cburnett/bQ.svg',
+  k: 'vendor/pieces/cburnett/bK.svg',
+  P: 'vendor/pieces/cburnett/wP.svg',
+  R: 'vendor/pieces/cburnett/wR.svg',
+  N: 'vendor/pieces/cburnett/wN.svg',
+  B: 'vendor/pieces/cburnett/wB.svg',
+  Q: 'vendor/pieces/cburnett/wQ.svg',
+  K: 'vendor/pieces/cburnett/wK.svg'
 };
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];

@@ -6,7 +6,7 @@ const { URL } = require('url');
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 8000);
 const ROOT_DIR = __dirname;
-const DEFAULT_PAGE = 'Best Games.html';
+const DEFAULT_PAGE = 'index.html';
 const STORAGE_DIR = path.join(ROOT_DIR, 'storage');
 const STORAGE_FOLDERS = {
   games: path.join(STORAGE_DIR, 'games'),

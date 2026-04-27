@@ -50,6 +50,8 @@ async function main() {
   requireFile('vendor/chess/chess-0.10.3.min.js');
   requireFile('vendor/stockfish/stockfish-17.1-lite-single-03e3232.js');
   requireFile('vendor/stockfish/stockfish-17.1-lite-single-03e3232.wasm');
+  ['bP', 'bR', 'bN', 'bB', 'bQ', 'bK', 'wP', 'wR', 'wN', 'wB', 'wQ', 'wK']
+    .forEach((piece) => requireFile(`vendor/pieces/cburnett/${piece}.svg`));
   requireFile('storage/games/best games.pgn');
 
   const { Chess } = require('./vendor/chess/chess-0.10.3.min.js');
@@ -110,6 +112,8 @@ async function main() {
     await assertHttpOk('/vendor/chess/chess-0.10.3.min.js');
     await assertHttpOk('/vendor/stockfish/stockfish-17.1-lite-single-03e3232.js');
     await assertHttpOk('/vendor/stockfish/stockfish-17.1-lite-single-03e3232.wasm');
+    await assertHttpOk('/vendor/pieces/cburnett/wK.svg');
+    await assertHttpOk('/vendor/pieces/cburnett/bK.svg');
     await assertHttpOk('/storage/games/best%20games.pgn');
   } finally {
     serverProcess.kill();
